@@ -1,10 +1,15 @@
 import lib.*;
 
+import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.FileHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 
 import static java.lang.Thread.State.RUNNABLE;
 import static java.lang.Thread.State.TERMINATED;
@@ -14,6 +19,7 @@ import static lib.Helper.toByteConverter;
 public class RaftNode implements MessageHandling {
     // for outputing and printing
     public static boolean VERBOSE = true;
+    private static final Logger logger = Logger.getLogger(RaftNode.class.getName());
 
     // node construction Members
     private int id;
@@ -42,6 +48,30 @@ public class RaftNode implements MessageHandling {
     private NodeRole nodeRole;
 
     public RaftNode(int port, int id, int num_peers) {
+//        logger.setLevel(Level.INFO);
+//        FileHandler fileHandler = null;
+//        try {
+//            fileHandler = new FileHandler("logfile.txt");
+////            SimpleFormatter formatter = new SimpleFormatter();
+////            fileHandler.setFormatter(formatter);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//        fileHandler.setLevel(Level.INFO);
+//        logger.addHandler(fileHandler);
+//        logger.setUseParentHandlers(false);
+        FileHandler fh = null;
+        try {
+            fh = new FileHandler("testlog.txt");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        logger.addHandler(fh);
+        logger.setUseParentHandlers(false);
+        SimpleFormatter formatter = new SimpleFormatter();
+        fh.setFormatter(formatter);
+
+
         this.id = id;
         this.num_peers = num_peers;
         this.persistentState = new PersistentState();
@@ -57,10 +87,13 @@ public class RaftNode implements MessageHandling {
             System.out.println("Initialize RaftNode...");
             System.out.printf("[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout);
         }
+        logger.info("Initialize RaftNode...");
+        logger.info(String.format("[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout));
         checkHeartBeat();
     }
 
     public void checkHeartBeat() {
+        logger.info(String.format("checkHeartBeat for Node %d", this.id));
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         executorService.scheduleAtFixedRate(() -> {
             if (nodeRole.equals(NodeRole.LEADER) || isHeartBeating) {
@@ -78,6 +111,8 @@ public class RaftNode implements MessageHandling {
                     "at term %d.\n", id, nodeRole,persistentState.currentTerm);
             System.out.flush();
         }
+        logger.info(String.format("[New election] by Node %d [role %s]" +
+                "at term %d.\n", id, nodeRole,persistentState.currentTerm));
 
         synchronized (persistentState) {
             persistentState.votedFor = id;
@@ -125,6 +160,8 @@ public class RaftNode implements MessageHandling {
                     id, votesCounter, persistentState.currentTerm);
             System.out.flush();
         }
+        logger.info(String.format("[Counting Vote...]Node %d receives %d votes at term %d.\n",
+                id, votesCounter, persistentState.currentTerm));
         if (nodeRole.equals(NodeRole.CANDIDATE) && votesCounter > num_peers / 2) {
             toLeaderState();
         }
@@ -145,6 +182,8 @@ public class RaftNode implements MessageHandling {
                     System.out.flush();
                 }
 
+                logger.info(String.format("Node %d add %s from client, %s at index %d\n",
+                        id, entry.toString(), nodeRole.toString(), oldIndex + 1));
                 leaderSendAppendEntry();
 
                 replyindex = oldIndex + 1;
@@ -195,6 +234,7 @@ public class RaftNode implements MessageHandling {
             System.out.printf("[AppendEntry success commit] Leader Node %d committed.\n", id);
             System.out.flush();
         }
+        logger.info(String.format("[AppendEntry success commit] Leader Node %d committed.\n", id));
     }
 
     public void waitForCommit(AppendEntryReceiveOperator commitOperator) {
@@ -234,6 +274,10 @@ public class RaftNode implements MessageHandling {
                         id, request.candidateId, persistentState.currentTerm);
                 System.out.flush();
             }
+            logger.info(String.format(
+                    "Node %d receives RequestVote from %d. at term %d\n",
+                    id, request.candidateId, persistentState.currentTerm));
+
             boolean voteGranted = false;
             if (request.term >= persistentState.currentTerm) {
                 refreshTerm(request.term);
@@ -241,6 +285,9 @@ public class RaftNode implements MessageHandling {
                     System.out.printf("Node %d receives RequestVote from %d. at term %d\n", id, request.candidateId, persistentState.currentTerm);
                     System.out.flush();
                 }
+                logger.info(String.format(
+                        "Node %d receives RequestVote from %d. at term %d\n",
+                        id, request.candidateId, persistentState.currentTerm));
                 synchronized (persistentState.votedFor) {
                     if (persistentState.votedFor == Integer.MIN_VALUE) {
                         LogEntry lastEntry = persistentState.getLastEntry();
@@ -256,6 +303,9 @@ public class RaftNode implements MessageHandling {
                         id, request.candidateId, persistentState.currentTerm);
                 System.out.flush();
             }
+            logger.info(String.format(
+                    "Node %d gives vote to Node %d. at term %d\n",
+                    id, request.candidateId, persistentState.currentTerm));
             return new Message(MessageType.RequestVoteReply, id, request.candidateId,
                     toByteConverter(new RequestVoteReply(persistentState.currentTerm, voteGranted)));
         }
@@ -277,11 +327,18 @@ public class RaftNode implements MessageHandling {
                         System.out.printf("[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
                                 id, appendEntriesArgs.leaderId);
                         System.out.flush();
+                        logger.info(String.format(
+                                "[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
+                                id, appendEntriesArgs.leaderId));
                     } else {
                         System.out.printf("[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
                                 persistentState.currentTerm,id, appendEntriesArgs.leaderId,
                                 appendEntriesArgs.prevLogIndex + 1, nodeRole.toString());
                         System.out.flush();
+                        logger.info(String.format(
+                                "[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
+                                persistentState.currentTerm,id, appendEntriesArgs.leaderId,
+                                appendEntriesArgs.prevLogIndex + 1, nodeRole.toString()));
                     }
                 }
 
@@ -307,6 +364,10 @@ public class RaftNode implements MessageHandling {
                                     id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
                                     nodeRole.toString());
                             System.out.flush();
+                            logger.info(String.format(
+                                    "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
+                                    id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
+                                    nodeRole.toString()));
                         }
 
                         LogEntry lastEntry = persistentState.getLastEntry();
@@ -315,6 +376,9 @@ public class RaftNode implements MessageHandling {
                                 System.out.printf("Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
                                         lastEntry.index, id, appendEntriesArgs.prevLogIndex);
                                 System.out.flush();
+                                logger.info(String.format(
+                                        "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
+                                        lastEntry.index, id, appendEntriesArgs.prevLogIndex));
                             }
                             persistentState.logEntries.remove(persistentState.logEntries.size() - 1);
                             lastEntry = persistentState.getLastEntry();
@@ -334,6 +398,8 @@ public class RaftNode implements MessageHandling {
                                     System.out.printf("Node %d commits logEntries at %d (command = %d)\n", id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command);
                                     System.out.printf("Node %d logEntries: %s\n", id, persistentState.logEntries.toString());
                                     System.out.flush();
+                                    logger.info(String.format(
+                                            "Node %d logEntries: %s\n", id, persistentState.logEntries.toString()));
                                 }
                                 lib.applyChannel(new ApplyMsg(id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command, false, null));
                             } catch (RemoteException e) {
@@ -375,6 +441,9 @@ public class RaftNode implements MessageHandling {
             System.out.printf("Change to Leader: Term: %s; Node %d -> Leader.\n\n",
                     persistentState.currentTerm, id);
             System.out.flush();
+            logger.info(String.format(
+                    "Change to Leader: Term: %s; Node %d -> Leader.\n\n",
+                    persistentState.currentTerm, id));
         }
         // Set up heart beat timer
         heartBeatTimer = new Timer();
@@ -408,6 +477,8 @@ public class RaftNode implements MessageHandling {
             if(VERBOSE){
                 System.out.printf("[Node %d become Follower]", id);
                 System.out.flush();
+                logger.info(String.format(
+                        "[Node %d become Follower]", id));
             }
         }
         nodeRole = NodeRole.FOLLOWER;
@@ -518,6 +589,9 @@ public class RaftNode implements MessageHandling {
                             System.out.printf("[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
                                     reply.term, id, this.followerId, ++counter);
                             System.out.flush();
+                            logger.info(String.format(
+                                    "[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
+                                            reply.term, id, this.followerId, ++counter));
                         }
 
                         // comit Log
