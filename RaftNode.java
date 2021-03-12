@@ -7,7 +7,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.FileHandler;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
@@ -210,10 +209,7 @@ public class RaftNode implements MessageHandling {
         List<LogEntry> logCopy = new ArrayList<>(persistentState.logEntries);
 
         // stop AppendEntrySendThreads
-        for (AppendEntrySendThread thread : aeSendThreadList) {
-            thread.threadStop();
-        }
-        aeSendThreadList = new ArrayList<>();
+        cleanThreadList();
 
         // create new thread for num_peers
         for (int i = 0; i < num_peers; i++) {
@@ -342,68 +338,69 @@ public class RaftNode implements MessageHandling {
                     }
                 }
 
-                if (appendEntriesArgs.term < persistentState.currentTerm) {
-                    success = false;
-                }
-                else if (notIllegle(appendEntriesArgs)) {
-                    success = false;
+
+                success = false;
+
+                // all server #2, leader to follower
+                if(appendEntriesArgs.term >= persistentState.currentTerm) {
                     isHeartBeating = true;
-                    refreshTerm(appendEntriesArgs.term);
-                }
-                else {
-                    success = true;
-                    isHeartBeating = true;
-                    if (nodeRole.equals(NodeRole.CANDIDATE))
-                        ToFollowerState();
                     refreshTerm(appendEntriesArgs.term);
 
-                    if (!appendEntriesArgs.entries.isEmpty()) {
-                        if (VERBOSE) {
-                            System.out.printf("Success on Node %d.\n", id);
-                            System.out.printf("Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
-                                    id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
-                                    nodeRole.toString());
-                            System.out.flush();
-                            logger.info(String.format(
-                                    "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
-                                    id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
-                                    nodeRole.toString()));
+                    if (isLegal(appendEntriesArgs)) {
+                        success = true;
+                        if (nodeRole.equals(NodeRole.CANDIDATE)) {
+                            ToFollowerState();
                         }
+                        refreshTerm(appendEntriesArgs.term);
 
-                        LogEntry lastEntry = persistentState.getLastEntry();
-                        while (lastEntry != null && lastEntry.index > appendEntriesArgs.prevLogIndex) {
+                        if (!appendEntriesArgs.entries.isEmpty()) {
                             if (VERBOSE) {
-                                System.out.printf("Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
-                                        lastEntry.index, id, appendEntriesArgs.prevLogIndex);
+                                System.out.printf("Success on Node %d.\n", id);
+                                System.out.printf("Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
+                                        id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
+                                        nodeRole.toString());
                                 System.out.flush();
                                 logger.info(String.format(
-                                        "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
-                                        lastEntry.index, id, appendEntriesArgs.prevLogIndex));
+                                        "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
+                                        id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
+                                        nodeRole.toString()));
                             }
-                            persistentState.logEntries.remove(persistentState.logEntries.size() - 1);
-                            lastEntry = persistentState.getLastEntry();
-                        }
 
-                        persistentState.logEntries.addAll(appendEntriesArgs.entries);
-                    }
-
-                    if (appendEntriesArgs.leaderCommit > commitIndex) {
-                        synchronized(lastApplied){
-                            lastApplied = commitIndex;
-                        }
-                        commitIndex = Integer.min(appendEntriesArgs.leaderCommit, persistentState.logEntries.size());
-                        for (int i = lastApplied; i < commitIndex; i++) {
-                            try {
+                            LogEntry lastEntry = persistentState.getLastEntry();
+                            while (lastEntry != null && lastEntry.index > appendEntriesArgs.prevLogIndex) {
                                 if (VERBOSE) {
-                                    System.out.printf("Node %d commits logEntries at %d (command = %d)\n", id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command);
-                                    System.out.printf("Node %d logEntries: %s\n", id, persistentState.logEntries.toString());
+                                    System.out.printf("Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
+                                            lastEntry.index, id, appendEntriesArgs.prevLogIndex);
                                     System.out.flush();
                                     logger.info(String.format(
-                                            "Node %d logEntries: %s\n", id, persistentState.logEntries.toString()));
+                                            "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
+                                            lastEntry.index, id, appendEntriesArgs.prevLogIndex));
                                 }
-                                lib.applyChannel(new ApplyMsg(id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command, false, null));
-                            } catch (RemoteException e) {
-                                e.printStackTrace();
+                                persistentState.logEntries.remove(persistentState.logEntries.size() - 1);
+                                lastEntry = persistentState.getLastEntry();
+                            }
+
+                            persistentState.logEntries.addAll(appendEntriesArgs.entries);
+                        }
+
+                        if (appendEntriesArgs.leaderCommit > commitIndex) {
+                            synchronized(lastApplied){
+                                lastApplied = commitIndex;
+                            }
+                            commitIndex = Integer.min(appendEntriesArgs.leaderCommit, persistentState.logEntries.size());
+                            for (int i = lastApplied; i < commitIndex; i++) {
+                                try {
+                                    if (VERBOSE) {
+                                        System.out.printf("Node %d commits logEntries at %d (command = %d)\n", id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command);
+                                        System.out.printf("Node %d logEntries: %s\n", id, persistentState.logEntries.toString());
+                                        System.out.flush();
+                                        logger.info(String.format(
+                                                "Node %d logEntries: %s\n", id, persistentState.logEntries.toString()));
+                                    }
+                                    lib.applyChannel(new ApplyMsg(id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command, false, null));
+                                } catch (RemoteException e) {
+                                    e.printStackTrace();
+                                }
                             }
                         }
                     }
@@ -416,12 +413,9 @@ public class RaftNode implements MessageHandling {
             }
         }
 
-        private boolean notIllegle(AppendEntriesArgs request) {
-            return (persistentState.logEntries.size() < request.prevLogIndex
-                    ||
-                    (persistentState.logEntries.size() > 0 && request.prevLogIndex > 0
-                            && persistentState.logEntries.size() >= request.prevLogIndex
-                            && persistentState.logEntries.get(request.prevLogIndex - 1).term != request.prevLogTerm));
+        private boolean isLegal(AppendEntriesArgs request) {
+            return ((persistentState.logEntries.size() >= request.prevLogIndex)  &&
+                    (persistentState.logEntries.size() == 0 || request.prevLogIndex == 0 || persistentState.logEntries.get(request.prevLogIndex - 1).term == request.prevLogTerm));
         }
     }
 
@@ -451,7 +445,7 @@ public class RaftNode implements MessageHandling {
         heartBeatTimer.scheduleAtFixedRate(heartBeatTask, 0, heartBeatFreq);
 
         // Re-initialization
-        aeSendThreadList = new ArrayList<>();
+        cleanThreadList();
 
         nextIndex = new Integer[num_peers];
         LogEntry lastEntry = persistentState.getLastEntry();
@@ -482,6 +476,10 @@ public class RaftNode implements MessageHandling {
             }
         }
         nodeRole = NodeRole.FOLLOWER;
+        cleanThreadList();
+    }
+
+    private synchronized void cleanThreadList(){
         if (aeSendThreadList != null) {
             for (AppendEntrySendThread thread : aeSendThreadList) {
                 thread.threadStop();
@@ -591,7 +589,7 @@ public class RaftNode implements MessageHandling {
                             System.out.flush();
                             logger.info(String.format(
                                     "[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
-                                            reply.term, id, this.followerId, ++counter));
+                                    reply.term, id, this.followerId, ++counter));
                         }
 
                         // comit Log
@@ -619,19 +617,20 @@ public class RaftNode implements MessageHandling {
             state = TERMINATED;
         }
 
-    }
+        private void increaseNextIndex(int id) {
+            synchronized (nextIndex) {
+                nextIndex[id]++; // add log
+            }
+        }
 
-    private void increaseNextIndex(int id) {
-        synchronized (nextIndex) {
-            nextIndex[id]++; // add log
+        private void decreaseNextIndex(int id) {
+            synchronized (nextIndex) {
+                nextIndex[id]--; // roll back
+            }
         }
     }
 
-    private void decreaseNextIndex(int id) {
-        synchronized (nextIndex) {
-            nextIndex[id]--; // roll back
-        }
-    }
+
 
     private class AppendEntryReceiveOperator{
         private int indexOnDecide;
