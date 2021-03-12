@@ -55,8 +55,7 @@ public class RaftNode implements MessageHandling {
 
         if (VERBOSE) {
             System.out.println("Initialize RaftNode...");
-            System.out.println("Initialize RaftNode...");
-            System.out.printf("[Random Election timeoput]Node %d, election timeout: %d ms.\n", id, electionTimeout);
+            System.out.printf("[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout);
         }
         checkHeartBeat();
     }

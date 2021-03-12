@@ -6,9 +6,9 @@ import java.util.Random;
 import java.util.TimerTask;
 
 public class Helper {
-    public static int heartBeatFreq = 100;
-    public static int MAX_ELECTION_TIMEOUT = 600;
-    public static int MIN_ELECTION_TIMEOUT = 300;
+    public static int heartBeatFreq = 50;
+    public static int MAX_ELECTION_TIMEOUT = 300;
+    public static int MIN_ELECTION_TIMEOUT = 150;
 
     public static int RandomTimeout(int lowrange, int highrange){
         Random random = new Random();
