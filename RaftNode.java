@@ -62,14 +62,11 @@ public class RaftNode implements MessageHandling {
 
     public void checkHeartBeat() {
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-        executorService.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                if (nodeRole.equals(NodeRole.LEADER) || isHeartBeating) {
-                    isHeartBeating = false;
-                } else {
-                    newElection();
-                }
+        executorService.scheduleAtFixedRate(() -> {
+            if (nodeRole.equals(NodeRole.LEADER) || isHeartBeating) {
+                isHeartBeating = false;
+            } else {
+                newElection();
             }
         }, 0, electionTimeout, TimeUnit.MILLISECONDS);
     }
@@ -137,7 +134,7 @@ public class RaftNode implements MessageHandling {
     @Override
     public synchronized StartReply start(int command) {
         synchronized (persistentState) {
-            int replyindex = Integer.MIN_VALUE;
+            int replyindex;
             if (nodeRole.equals(NodeRole.LEADER)) {
                 int oldIndex = persistentState.logEntries.size();
                 LogEntry entry = new LogEntry(persistentState.currentTerm, oldIndex + 1, command);
@@ -282,7 +279,7 @@ public class RaftNode implements MessageHandling {
                         System.out.flush();
                     } else {
                         System.out.printf("[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
-                                appendEntriesArgs.term,id, persistentState.currentTerm, appendEntriesArgs.leaderId,
+                                persistentState.currentTerm,id, appendEntriesArgs.leaderId,
                                 appendEntriesArgs.prevLogIndex + 1, nodeRole.toString());
                         System.out.flush();
                     }
@@ -357,8 +354,8 @@ public class RaftNode implements MessageHandling {
             return (persistentState.logEntries.size() < request.prevLogIndex
                     ||
                     (persistentState.logEntries.size() > 0 && request.prevLogIndex > 0
-                    && persistentState.logEntries.size() >= request.prevLogIndex
-                    && persistentState.logEntries.get(request.prevLogIndex - 1).term != request.prevLogTerm));
+                            && persistentState.logEntries.size() >= request.prevLogIndex
+                            && persistentState.logEntries.get(request.prevLogIndex - 1).term != request.prevLogTerm));
         }
     }
 
@@ -449,7 +446,6 @@ public class RaftNode implements MessageHandling {
         private int followerId;
         private int currentIndex;
         private State state = RUNNABLE;
-        private boolean isRunning;
         private AppendEntryReceiveOperator commitOperator;
         private int counter = 0;
         private List<LogEntry> logCopy;
@@ -488,9 +484,7 @@ public class RaftNode implements MessageHandling {
                     startIndex = nextIndex[this.followerId] - 1;
                 }
 //                int startIndex = Math.max(0, nextIndex[this.followerId] - 1);
-                for (LogEntry logEntry : logCopy.subList(startIndex, currentIndex)) {
-                    entries.add(logEntry);
-                }
+                entries.addAll(logCopy.subList(startIndex, currentIndex));
 
                 // get prevLogTerm
                 int prevLogTerm = 0;
