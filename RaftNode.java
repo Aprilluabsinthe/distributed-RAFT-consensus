@@ -25,7 +25,7 @@ public class RaftNode implements MessageHandling {
 
     //Volatile state on all servers:
     private int commitIndex;
-    private int lastApplied;
+    private Integer lastApplied;
 
     // Volatile state on leaders:
     //(Reinitialized after election)
@@ -47,6 +47,7 @@ public class RaftNode implements MessageHandling {
         this.persistentState = new PersistentState();
         this.nodeRole = NodeRole.FOLLOWER;
         this.commitIndex = 0;
+        this.lastApplied = 0;
 
         this.isHeartBeating = false;
         lib = new TransportLib(port, id, this);
@@ -91,7 +92,6 @@ public class RaftNode implements MessageHandling {
         LogEntry lastLogEntry = persistentState.getLastEntry();
         RequestVoteArgs requestVoteArgs = new RequestVoteArgs(persistentState.currentTerm, id, lastLogEntry.index, lastLogEntry.term);
         byte[] byteReqVoteBody = toByteConverter(requestVoteArgs);
-
 
         int votesCounter = 1;
         // has to ge a candidate
@@ -328,9 +328,11 @@ public class RaftNode implements MessageHandling {
                     }
 
                     if (appendEntriesArgs.leaderCommit > commitIndex) {
-                        int oldCommitIndex = commitIndex;
+                        synchronized(lastApplied){
+                            lastApplied = commitIndex;
+                        }
                         commitIndex = Integer.min(appendEntriesArgs.leaderCommit, persistentState.logEntries.size());
-                        for (int i = oldCommitIndex; i < commitIndex; i++) {
+                        for (int i = lastApplied; i < commitIndex; i++) {
                             try {
                                 if (VERBOSE) {
                                     System.out.printf("Node %d commits logEntries at %d (command = %d)\n", id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command);
@@ -344,6 +346,7 @@ public class RaftNode implements MessageHandling {
                         }
                     }
                 }
+                lastApplied = commitIndex;
                 AppendEntriesReply replyBody = new AppendEntriesReply(persistentState.currentTerm, success);
                 byte[] byteReplyBody = toByteConverter(replyBody);
                 Message replyMessage = new Message(MessageType.AppendEntriesReply, id, message.getSrc(),byteReplyBody);
@@ -567,10 +570,12 @@ public class RaftNode implements MessageHandling {
         private int indexOnDecide;
         private int recvCounter = 1;
         private boolean hasCommitted = false;
-        private int lastApplied = commitIndex;
 
         private AppendEntryReceiveOperator(int index) {
             this.indexOnDecide = index;
+            synchronized(lastApplied){
+                lastApplied = commitIndex;
+            }
         }
 
         private void commitLog() {
@@ -616,6 +621,7 @@ public class RaftNode implements MessageHandling {
                     }
 
                     commitIndex = indexOnDecide;
+                    lastApplied = commitIndex;
                     hasCommitted = true;
                 }
             }
