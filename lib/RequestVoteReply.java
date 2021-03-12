@@ -4,33 +4,36 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * RequestVoteReply -- wrapper for packing any result information in your
- * implementation of the RequestVote call; should be serializable
+ * This class is a wrapper for packing all the result information that you
+ * might use in your own implementation of the RequestVote call, and also
+ * should be serializable to return by remote function call.
+ *
  */
-public class RequestVoteReply {
+public class RequestVoteReply implements Serializable{
     private static final long serialVersionUID = 1L;
-    private int term;
-    private boolean voteGranted;
+
+    public int term;
+    public boolean voteGranted;
 
     public RequestVoteReply(int term, boolean voteGranted) {
         this.term = term;
         this.voteGranted = voteGranted;
     }
 
-    public int getTerm() {
-        return term;
-    }
-
     public void setTerm(int term) {
         this.term = term;
     }
 
-    public boolean isVoteGranted() {
-        return voteGranted;
-    }
-
     public void setVoteGranted(boolean voteGranted) {
         this.voteGranted = voteGranted;
+    }
+
+    @Override
+    public String toString() {
+        return "RequestVoteReply{" +
+                "term=" + term +
+                ", voteGranted=" + voteGranted +
+                '}';
     }
 
     @Override
@@ -44,13 +47,5 @@ public class RequestVoteReply {
     @Override
     public int hashCode() {
         return Objects.hash(term, voteGranted);
-    }
-
-    @Override
-    public String toString() {
-        return "RequestVoteReply{" +
-                "term=" + term +
-                ", voteGranted=" + voteGranted +
-                '}';
     }
 }

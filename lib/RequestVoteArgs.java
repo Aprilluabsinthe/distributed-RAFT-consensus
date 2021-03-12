@@ -4,92 +4,49 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * RequestVoteArgs -- wrapper for packing any arguments you want in a RequestVote,
- * should be serializable to fill in the payload of a Message to send
+ * This class is a wrapper for packing all the arguments that you might use in
+ * the RequestVote call, and should be serializable to fill in the payload of
+ * Message to be sent.
+ *
  */
-public class RequestVoteArgs implements Serializable {
+public class RequestVoteArgs implements Serializable{
     private static final long serialVersionUID = 1L;
-    private int term;
-    private int candidateID;
-    private int LastLogIndex;
-    private int LastLogTerm;
+    public int term;
+    public int candidateId;
+    public int lastLogIndex;
+    public int lastLogTerm;
 
-    /**
-     * Construction for RequestVoteArgs
-     * @param term candidate's term
-     * @param candidateID candidate's requesting vote
-     * @param lastLogIndex index of candidate's last log entry
-     * @param lastLogTerm Term of candidate's last log entry
-     */
-    public RequestVoteArgs(int term, int candidateID, int lastLogIndex, int lastLogTerm) {
+    public RequestVoteArgs(int term, int candidateId, int lastLogIndex, int lastLogTerm) {
         this.term = term;
-        this.candidateID = candidateID;
-        this.LastLogIndex = lastLogIndex;
-        this.LastLogTerm = lastLogTerm;
+        this.candidateId = candidateId;
+        this.lastLogIndex = lastLogIndex;
+        this.lastLogTerm = lastLogTerm;
     }
 
-    /**
-     * Getter for candidate's term
-     * @return candidate's term
-     */
     public int getTerm() {
         return term;
     }
 
-    /**
-     * Setter for candidate's term
-     * @param term candidate's term
-     */
-    public void setTerm(int term) {
-        this.term = term;
+    public int getCandidateId() {
+        return candidateId;
     }
 
-    /**
-     * Getter for candidate's requesting vote
-     * @return candidate's requesting vote
-     */
-    public int getCandidateID() {
-        return candidateID;
-    }
-
-    /**
-     * Setter for candidate's requesting vote
-     * @param candidateID candidate's requesting vote
-     */
-    public void setCandidateID(int candidateID) {
-        this.candidateID = candidateID;
-    }
-
-    /**
-     * Getter for index of candidate's last log entry
-     * @return index of candidate's last log entry
-     */
     public int getLastLogIndex() {
-        return LastLogIndex;
+        return lastLogIndex;
     }
 
-    /**
-     * Setter index of candidate's last log entry
-     * @param lastLogIndex index of candidate's last log entry
-     */
-    public void setLastLogIndex(int lastLogIndex) {
-        LastLogIndex = lastLogIndex;
-    }
-
-    /**
-     * Getter for Term of candidate's last log entry
-     * @return Term of candidate's last log entry
-     */
     public int getLastLogTerm() {
-        return LastLogTerm;
+        return lastLogTerm;
     }
 
-    /**
-     * Setter for Term of candidate's last log entry
-     * @param lastLogTerm Term of candidate's last log entry
-     */
-    public void setLastLogTerm(int lastLogTerm) {
-        LastLogTerm = lastLogTerm;
+    @Override
+    public String toString() {
+        return "RequestVoteArgs{" +
+                "term=" + term +
+                ", candidateId=" + candidateId +
+                ", lastLogIndex=" + lastLogIndex +
+                ", lastLogTerm=" + lastLogTerm +
+                '}';
     }
 
     @Override
@@ -97,21 +54,11 @@ public class RequestVoteArgs implements Serializable {
         if (this == o) return true;
         if (!(o instanceof RequestVoteArgs)) return false;
         RequestVoteArgs that = (RequestVoteArgs) o;
-        return term == that.term && candidateID == that.candidateID && LastLogIndex == that.LastLogIndex && LastLogTerm == that.LastLogTerm;
+        return term == that.term && candidateId == that.candidateId && lastLogIndex == that.lastLogIndex && lastLogTerm == that.lastLogTerm;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(term, candidateID, LastLogIndex, LastLogTerm);
-    }
-
-    @Override
-    public String toString() {
-        return "RequestVoteArgs{" +
-                "term=" + term +
-                ", candidateID=" + candidateID +
-                ", LastLogIndex=" + LastLogIndex +
-                ", LastLogTerm=" + LastLogTerm +
-                '}';
+        return Objects.hash(term, candidateId, lastLogIndex, lastLogTerm);
     }
 }

@@ -15,7 +15,7 @@ public class AppendEntriesReply implements Serializable {
    * @param term current Term, for leader to update itself
    * @param success true if follower contained entry matching prevLogIndex and prevLogTerm
    */
-  public AppendEntriesReply(int term, boolean success, int proposedNextIndex) {
+  public AppendEntriesReply(int term, boolean success) {
     this.term = term;
     this.success = success;
   }
@@ -24,7 +24,7 @@ public class AppendEntriesReply implements Serializable {
    * Getter for Current Term
    * @return Current Term
    */
-  public int getTerm() {
+  public synchronized int getTerm() {
     return term;
   }
 
@@ -32,7 +32,7 @@ public class AppendEntriesReply implements Serializable {
    * Setter for current Term
    * @param term Current Term
    */
-  public void setTerm(int term) {
+  public synchronized void setTerm(int term) {
     this.term = term;
   }
 
@@ -40,7 +40,7 @@ public class AppendEntriesReply implements Serializable {
    * whether follower contained entry matching prevLogIndex
    * @return true if follower contained entry matching prevLogIndex
    */
-  public boolean isSuccess() {
+  public synchronized boolean isSuccess() {
     return success;
   }
 
@@ -48,7 +48,7 @@ public class AppendEntriesReply implements Serializable {
    * Setter for status follower contained entry matching prevLogIndex
    * @param success status
    */
-  public void setSuccess(boolean success) {
+  public synchronized void setSuccess(boolean success) {
     this.success = success;
   }
 }

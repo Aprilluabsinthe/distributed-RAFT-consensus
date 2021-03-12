@@ -5,9 +5,9 @@ import java.util.Objects;
 
 public class LogEntry implements Serializable {
   private static final long serialVersionUID = 1L;
-  private int term;
-  private int index;
-  private int command;
+  public int term;
+  public int index;
+  public int command;
 
   public LogEntry(int term, int index, int command) {
     this.term = term;
@@ -15,27 +15,27 @@ public class LogEntry implements Serializable {
     this.command = command;
   }
 
-  public int getTerm() {
+  public synchronized int getTerm() {
     return term;
   }
 
-  public void setTerm(int term) {
+  public synchronized void setTerm(int term) {
     this.term = term;
   }
 
-  public int getIndex() {
+  public synchronized int getIndex() {
     return index;
   }
 
-  public void setIndex(int index) {
+  public synchronized void setIndex(int index) {
     this.index = index;
   }
 
-  public int getCommand() {
+  public synchronized int getCommand() {
     return command;
   }
 
-  public void setCommand(int command) {
+  public synchronized void setCommand(int command) {
     this.command = command;
   }
 

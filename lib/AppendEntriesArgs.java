@@ -37,7 +37,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for leader's term
    * @return int leader's term
    */
-  public int getTerm() {
+  public synchronized int getTerm() {
     return term;
   }
 
@@ -45,7 +45,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for leader's term
    * @param term leader's term
    */
-  public void setTerm(int term) {
+  public synchronized void setTerm(int term) {
     this.term = term;
   }
 
@@ -53,7 +53,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for leader's ID
    * @return int leader's ID
    */
-  public int getLeaderId() {
+  public synchronized int getLeaderId() {
     return leaderId;
   }
 
@@ -61,7 +61,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for leader's ID
    * @param leaderId leader's ID
    */
-  public void setLeaderId(int leaderId) {
+  public synchronized void setLeaderId(int leaderId) {
     this.leaderId = leaderId;
   }
 
@@ -69,7 +69,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for PrevLogIndex
    * @return PrevLogIndex
    */
-  public int getPrevLogIndex() {
+  public synchronized int getPrevLogIndex() {
     return prevLogIndex;
   }
 
@@ -77,7 +77,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for PrevLogIndex
    * @param prevLogIndex Previous Log Index
    */
-  public void setPrevLogIndex(int prevLogIndex) {
+  public synchronized void setPrevLogIndex(int prevLogIndex) {
     this.prevLogIndex = prevLogIndex;
   }
 
@@ -85,7 +85,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for PrevLogTerm
    * @return Previous Log Term
    */
-  public int getPrevLogTerm() {
+  public synchronized int getPrevLogTerm() {
     return prevLogTerm;
   }
 
@@ -93,7 +93,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for previous Log's Term
    * @param prevLogTerm previous Log's Term
    */
-  public void setPrevLogTerm(int prevLogTerm) {
+  public synchronized void setPrevLogTerm(int prevLogTerm) {
     this.prevLogTerm = prevLogTerm;
   }
 
@@ -101,7 +101,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for Entries list
    * @return Entries list
    */
-  public List<LogEntry> getEntries() {
+  public synchronized List<LogEntry> getEntries() {
     return entries;
   }
 
@@ -109,7 +109,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for Entries list
    * @param entries Entries list
    */
-  public void setEntries(List<LogEntry> entries) {
+  public synchronized void setEntries(List<LogEntry> entries) {
     this.entries = entries;
   }
 
@@ -117,7 +117,7 @@ public class AppendEntriesArgs implements Serializable {
    * Getter for leader's commit index
    * @return leader's commit index
    */
-  public int getLeaderCommit() {
+  public synchronized int getLeaderCommit() {
     return leaderCommit;
   }
 
@@ -125,7 +125,7 @@ public class AppendEntriesArgs implements Serializable {
    * Setter for leader's commit index
    * @param leaderCommit leader's commit index
    */
-  public void setLeaderCommit(int leaderCommit) {
+  public synchronized void setLeaderCommit(int leaderCommit) {
     this.leaderCommit = leaderCommit;
   }
 }
