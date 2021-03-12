@@ -17,7 +17,7 @@ all :
 # Delete all class files
 .PHONY : clean
 clean :
-	rm -f *.class lib/*.class
+	rm -f *.class lib/*.class *.txt *.log *.txt.* *.log.*
 
 # Generate documentation for everything in to the JAVAFILES directories
 .PHONY : docs
