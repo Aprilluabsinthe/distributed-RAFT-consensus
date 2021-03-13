@@ -1,14 +1,13 @@
 package lib;
 
 import java.io.*;
-import java.rmi.RemoteException;
 import java.util.Random;
-import java.util.TimerTask;
 
 public class Helper {
     public static int heartBeatFreq = 150;
     public static int MAX_ELECTION_TIMEOUT = 600;
     public static int MIN_ELECTION_TIMEOUT = 300;
+    public static boolean VERBOSE = true;
 
     public static int RandomTimeout(int lowrange, int highrange){
         Random random = new Random();
@@ -50,6 +49,15 @@ public class Helper {
             e.printStackTrace();
         }
         return object;
+    }
+
+    public void debugLog(String string){
+        if (VERBOSE) {
+            System.out.printf(
+                    string
+            );
+            System.out.flush();
+        }
     }
 
 }
