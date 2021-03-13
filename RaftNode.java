@@ -143,6 +143,13 @@ public class RaftNode implements MessageHandling {
                     }
                     if (reply.voteGranted){
                         votesCounter++;
+                        if (VERBOSE){
+                            System.out.printf("[is Voting...]Node %d receives one vote at term %d.\n",
+                                    id, persistentState.currentTerm);
+                            System.out.flush();
+                        }
+                        logger.info(String.format("[Counting Vote...]Node %d receives %d votes at term %d.\n",
+                                id, votesCounter, persistentState.currentTerm));
                     }
                 }
             }
@@ -164,27 +171,27 @@ public class RaftNode implements MessageHandling {
     @Override
     public synchronized StartReply start(int command) {
         synchronized (persistentState) {
-            int replyindex;
             if (nodeRole.equals(NodeRole.LEADER)) {
-                int oldIndex = persistentState.logEntries.size();
-                LogEntry entry = new LogEntry(persistentState.currentTerm, oldIndex + 1, command);
-                persistentState.logEntries.add(entry);
+
+                LogEntry entry = persistentState.addCommandToEntry(command);
+                int entrylength = persistentState.getStaticEntryLength();
+
                 if (VERBOSE){
                     System.out.printf("Node %d add %s from client, %s at index %d\n",
-                            id, entry.toString(), nodeRole.toString(), oldIndex + 1);
+                            id, entry.toString(), nodeRole.toString(), entrylength);
                     System.out.flush();
                 }
-
                 logger.info(String.format("Node %d add %s from client, %s at index %d\n",
-                        id, entry.toString(), nodeRole.toString(), oldIndex + 1));
+                        id, entry.toString(), nodeRole.toString(), entrylength));
+
                 leaderSendAppendEntry();
 
-                replyindex = oldIndex + 1;
-            } else {
-                replyindex = persistentState.getLastEntry().index;
+                StartReply startReply = new StartReply(entrylength, persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
+                return startReply;
+            } else { // not a leader
+                return new StartReply(0, 0, false);
             }
-            StartReply startReply = new StartReply(replyindex, persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
-            return startReply;
+
         }
     }
 
@@ -241,11 +248,11 @@ public class RaftNode implements MessageHandling {
     @Override
     public Message deliverMessage(Message message) {
         BuildReply buildReply = new BuildReply();
-        if (message.getType().equals(MessageType.RequestVoteArgs)) {
+        if (message.getType() == MessageType.RequestVoteArgs) {
             return buildReply.replyToReqVoteArgs(message);
         }
 
-        if (message.getType().equals(MessageType.AppendEntriesArgs)) {
+        if (message.getType() == MessageType.AppendEntriesArgs) {
             return buildReply.replyToApdEntriesArgs(message);
         }
 
@@ -258,6 +265,8 @@ public class RaftNode implements MessageHandling {
 
         private Message replyToReqVoteArgs(Message message) {
             RequestVoteArgs request = (RequestVoteArgs) toObjectConverter(message.getBody());
+            // has to be a candidate
+
             if (VERBOSE) {
                 System.out.printf("Node %d receives RequestVote from %d. at term %d\n",
                         id, request.candidateId, persistentState.currentTerm);
@@ -287,14 +296,30 @@ public class RaftNode implements MessageHandling {
                     }
                 }
             }
-            if (VERBOSE && voteGranted){
-                System.out.printf("Node %d gives vote to Node %d. at term %d\n",
-                        id, request.candidateId, persistentState.currentTerm);
-                System.out.flush();
+            else{
+                if (VERBOSE) {
+                    System.out.printf(
+                            "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
+                    );
+                    System.out.flush();
+                    logger.info(String.format(
+                            "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
+                    ));
+                }
             }
+
+            if (voteGranted){
+                if (VERBOSE) {
+                    System.out.printf("Node %d gives vote to Node %d. at term %d\n",
+                            id, request.candidateId, persistentState.currentTerm);
+                    System.out.flush();
+                }
+            }
+
             logger.info(String.format(
                     "Node %d gives vote to Node %d. at term %d\n",
                     id, request.candidateId, persistentState.currentTerm));
+
             return new Message(MessageType.RequestVoteReply, id, request.candidateId,
                     toByteConverter(new RequestVoteReply(persistentState.currentTerm, voteGranted)));
         }
@@ -310,16 +335,16 @@ public class RaftNode implements MessageHandling {
                 AppendEntriesArgs appendEntriesArgs = (AppendEntriesArgs) toObjectConverter(message.getBody());
                 boolean success;
 
-                // VERBOSE message
+                // debug message
                 if (VERBOSE) {
-                    if (appendEntriesArgs.entries.size() == 0) {
+                    if (appendEntriesArgs.entries.size() == 0) { // is heartbest
                         System.out.printf("[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
                                 id, appendEntriesArgs.leaderId);
                         System.out.flush();
                         logger.info(String.format(
                                 "[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
                                 id, appendEntriesArgs.leaderId));
-                    } else {
+                    } else { // is Append Entry
                         System.out.printf("[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
                                 persistentState.currentTerm,id, appendEntriesArgs.leaderId,
                                 appendEntriesArgs.prevLogIndex + 1, nodeRole.toString());
@@ -333,8 +358,9 @@ public class RaftNode implements MessageHandling {
 
 
                 success = false;
+                AppendEntriesReply replyBody = null;
 
-                // all server #2, leader to follower
+                // all server #2, change from leader to follower
                 if(appendEntriesArgs.term >= persistentState.currentTerm) {
                     isHeartBeating = true;
                     refreshTerm(appendEntriesArgs.term);
@@ -376,11 +402,13 @@ public class RaftNode implements MessageHandling {
                             persistentState.logEntries.addAll(appendEntriesArgs.entries);
                         }
 
+                        // #5
                         if (appendEntriesArgs.leaderCommit > commitIndex) {
                             synchronized(lastApplied){
                                 lastApplied = commitIndex;
                             }
-                            commitIndex = Integer.min(appendEntriesArgs.leaderCommit, persistentState.logEntries.size());
+                            commitIndex = Math.min(appendEntriesArgs.leaderCommit, persistentState.logEntries.size());
+                            // for all server #1
                             for (int i = lastApplied; i < commitIndex; i++) {
                                 try {
                                     if (VERBOSE) {
@@ -395,11 +423,21 @@ public class RaftNode implements MessageHandling {
                                     e.printStackTrace();
                                 }
                             }
+                            lastApplied = commitIndex;
+                        }
+                    }
+                    else{ // illeal, output debug information
+                        if (VERBOSE) {
+                            System.out.printf("[AppendEntry rejected] Node %d reject AppendEntry\n", id);
+                            System.out.flush();
+                            logger.info(String.format(
+                                    "[AppendEntry rejected] Node %d reject AppendEntry,out of range\n", id
+                            ));
                         }
                     }
                 }
-                lastApplied = commitIndex;
-                AppendEntriesReply replyBody = new AppendEntriesReply(persistentState.currentTerm, success);
+
+                replyBody = new AppendEntriesReply(persistentState.currentTerm, success);
                 byte[] byteReplyBody = toByteConverter(replyBody);
                 Message replyMessage = new Message(MessageType.AppendEntriesReply, id, message.getSrc(),byteReplyBody);
                 return replyMessage;
@@ -439,11 +477,9 @@ public class RaftNode implements MessageHandling {
 
         // Re-initialization
         cleanThreadList();
-
         nextIndex = new Integer[num_peers];
         LogEntry lastEntry = persistentState.getLastEntry();
         Arrays.fill(this.nextIndex, lastEntry.getIndex() + 1);
-
         matchIndex = new Integer[num_peers];
         Arrays.fill(this.matchIndex, 0);
 
@@ -578,9 +614,10 @@ public class RaftNode implements MessageHandling {
                 }
 
                 // receive Append Entry Reply
-                if (response == null) {
+                if (response == null || !nodeRole.equals(NodeRole.LEADER)) {
                     return;
-                } else {
+                }
+                else {
                     AppendEntriesReply reply = (AppendEntriesReply) toObjectConverter(response.getBody());
                     if (reply.isSuccess()) {
                         if (VERBOSE) {
@@ -597,8 +634,11 @@ public class RaftNode implements MessageHandling {
 
                         // update log index
                         increaseNextIndex(this.followerId);
+                        updateMatchIndex(this.followerId, nextIndex[followerId]-1);
+
                         return;
-                    } else { // if reply not success
+                    }
+                    else { // rejected
                         if (reply.term > currentTerm) {
                             refreshTerm(reply.term); // refresh Term
                         } else {
@@ -606,6 +646,7 @@ public class RaftNode implements MessageHandling {
                         }
                     }
                 }
+
             }
         }
 
@@ -628,8 +669,13 @@ public class RaftNode implements MessageHandling {
                 nextIndex[id]--; // roll back
             }
         }
-    }
 
+        private void updateMatchIndex(int id, int content) {
+            synchronized (matchIndex) {
+                matchIndex[id] = content;
+            }
+        }
+    }
 
 
     private class AppendEntryReceiveOperator{
@@ -646,15 +692,12 @@ public class RaftNode implements MessageHandling {
 
         private void commitLog() {
             synchronized (this) {
-                if (hasCommitted) {
-                    return;
-                }
 
                 recvCounter++;
 
                 // receive majority 1/2 votes
                 if (recvCounter > num_peers / 2) {
-                    // refresh commit Index
+                    // commit and apply
                     if (VERBOSE) {
                         System.out.printf("[Reach Agreement] Node %d " +
                                         "received success for %d times \n",
@@ -695,10 +738,6 @@ public class RaftNode implements MessageHandling {
 
         private Boolean hasCommitted() {
             synchronized (this) {
-                if (VERBOSE) {
-                    System.out.printf("[Reach Agreement] Node %d has successfully committed \n", id);
-                    System.out.flush();
-                }
                 return hasCommitted;
             }
         }

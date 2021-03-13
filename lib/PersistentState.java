@@ -29,6 +29,12 @@ public class PersistentState {
         }
     }
 
+    public synchronized LogEntry addCommandToEntry(int command){
+        LogEntry entry = new LogEntry(currentTerm, logEntries.size() + 1, command);
+        logEntries.add(entry);
+        return entry;
+    }
+
     public ArrayList<LogEntry> getStaticEntriesBetween(int startIndex, int endIndex){
         if(startIndex >= 0 && startIndex <= logEntries.size()){
             return new ArrayList<LogEntry>(logEntries.subList(startIndex, endIndex));
@@ -46,6 +52,15 @@ public class PersistentState {
             return new ArrayList<LogEntry>();
         }
     }
+
+    public synchronized int getSynchrEntryLength(){
+        return logEntries.size();
+    }
+
+    public int getStaticEntryLength(){
+        return logEntries.size();
+    }
+
 
     public synchronized int getCurrentTerm() {
         return currentTerm;
