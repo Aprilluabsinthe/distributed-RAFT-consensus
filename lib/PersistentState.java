@@ -44,6 +44,18 @@ public class PersistentState {
         }
     }
 
+    public synchronized void removeEntriesFrom(int index){
+        LogEntry lastEntry = getLastEntry();
+        while (lastEntry != null && lastEntry.index > index) {
+            logEntries.remove(logEntries.size() - 1);
+            lastEntry = getLastEntry();
+        }
+    }
+
+    public synchronized void addAllLogEntries(List<LogEntry> list){
+        logEntries.addAll(list);
+    }
+
     public synchronized ArrayList<LogEntry> getSynchrEntriesBetween(int startIndex,int endIndex){
         if(startIndex >= 0 && startIndex <= logEntries.size()){
             return new ArrayList<LogEntry>(logEntries.subList(startIndex, endIndex));
