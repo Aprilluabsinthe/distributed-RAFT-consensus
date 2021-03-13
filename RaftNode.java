@@ -64,15 +64,6 @@ public class RaftNode implements MessageHandling {
         checkHeartBeat();
     }
 
-    public void debugLog(String string){
-        if (VERBOSE) {
-            System.out.printf(
-                    string
-            );
-            System.out.flush();
-        }
-    }
-
     public void checkHeartBeat() {
         debugLog(String.format(
                 "checkHeartBeat for Node %d", this.id

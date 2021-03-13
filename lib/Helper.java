@@ -51,7 +51,7 @@ public class Helper {
         return object;
     }
 
-    public void debugLog(String string){
+    public static void debugLog(String string){
         if (VERBOSE) {
             System.out.printf(
                     string
