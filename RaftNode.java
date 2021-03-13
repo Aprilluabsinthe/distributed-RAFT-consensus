@@ -6,9 +6,6 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.FileHandler;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 import static java.lang.Thread.State.RUNNABLE;
 import static java.lang.Thread.State.TERMINATED;
@@ -18,7 +15,6 @@ import static lib.Helper.toByteConverter;
 public class RaftNode implements MessageHandling {
     // for outputing and printing
     public static boolean VERBOSE = true;
-    private static final Logger logger = Logger.getLogger(RaftNode.class.getName());
 
     // node construction Members
     private int id;
@@ -47,17 +43,6 @@ public class RaftNode implements MessageHandling {
     private NodeRole nodeRole;
 
     public RaftNode(int port, int id, int num_peers) {
-        FileHandler fh = null;
-        try {
-            fh = new FileHandler("testlog.txt");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        logger.addHandler(fh);
-        logger.setUseParentHandlers(false);
-        SimpleFormatter formatter = new SimpleFormatter();
-        fh.setFormatter(formatter);
-
 
         this.id = id;
         this.num_peers = num_peers;
@@ -74,18 +59,28 @@ public class RaftNode implements MessageHandling {
         lib = new TransportLib(port, id, this);
         this.electionTimeout = Helper.RandomTimeout(MIN_ELECTION_TIMEOUT, MAX_ELECTION_TIMEOUT);
 
-        if (VERBOSE) {
-            System.out.println("Initialize RaftNode...");
-            System.out.printf("[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout);
-        }
-        logger.info("Initialize RaftNode...");
-        logger.info(String.format("[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout));
+        debugLog("Initialize RaftNode...");
+        debugLog(String.format(
+                "[Random Election timeoput] Node %d, election timeout: %d ms.\n", id, electionTimeout
+        ));
 
         checkHeartBeat();
     }
 
+    public void debugLog(String string){
+        if (VERBOSE) {
+            System.out.printf(
+                    string
+            );
+            System.out.flush();
+        }
+    }
+
     public void checkHeartBeat() {
-        logger.info(String.format("checkHeartBeat for Node %d", this.id));
+        debugLog(String.format(
+                "checkHeartBeat for Node %d", this.id
+        ));
+
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         executorService.scheduleAtFixedRate(() -> {
             if (nodeRole.equals(NodeRole.LEADER) || isHeartBeating ) {
@@ -99,13 +94,10 @@ public class RaftNode implements MessageHandling {
 
     private void newElection() {
         persistentState.currentTerm++;
-        if (VERBOSE){
-            System.out.printf("[New election] by Node %d [role %s]" +
-                    "at term %d.\n", id, nodeRole,persistentState.currentTerm);
-            System.out.flush();
-        }
-        logger.info(String.format("[New election] by Node %d [role %s]" +
-                "at term %d.\n", id, nodeRole,persistentState.currentTerm));
+        debugLog(String.format(
+                "[New election] by Node %d [role %s] at term %d.\n",
+                id, nodeRole,persistentState.currentTerm
+        ));
 
         synchronized (persistentState) {
             persistentState.votedFor = id;
@@ -143,25 +135,20 @@ public class RaftNode implements MessageHandling {
                     }
                     if (reply.voteGranted){
                         votesCounter++;
-                        if (VERBOSE){
-                            System.out.printf("[is Voting...]Node %d receives one vote at term %d.\n",
-                                    id, persistentState.currentTerm);
-                            System.out.flush();
-                        }
-                        logger.info(String.format("[Counting Vote...]Node %d receives %d votes at term %d.\n",
-                                id, votesCounter, persistentState.currentTerm));
+                        debugLog(String.format(
+                                "[is Voting...]Node %d receives one vote at term %d.\n",
+                                id, persistentState.currentTerm
+                        ));
                     }
                 }
             }
         }
 
-        if (VERBOSE){
-            System.out.printf("[Counting Vote...]Node %d receives %d votes at term %d.\n",
-                    id, votesCounter, persistentState.currentTerm);
-            System.out.flush();
-        }
-        logger.info(String.format("[Counting Vote...]Node %d receives %d votes at term %d.\n",
-                id, votesCounter, persistentState.currentTerm));
+        debugLog(String.format(
+                "[Counting Vote...]Node %d receives %d votes at term %d.\n",
+                id, votesCounter, persistentState.currentTerm
+        ));
+
         if (nodeRole.equals(NodeRole.CANDIDATE) && votesCounter > num_peers / 2) {
             toLeaderState();
         }
@@ -176,13 +163,10 @@ public class RaftNode implements MessageHandling {
                 LogEntry entry = persistentState.addCommandToEntry(command);
                 int entrylength = persistentState.getStaticEntryLength();
 
-                if (VERBOSE){
-                    System.out.printf("Node %d add %s from client, %s at index %d\n",
-                            id, entry.toString(), nodeRole.toString(), entrylength);
-                    System.out.flush();
-                }
-                logger.info(String.format("Node %d add %s from client, %s at index %d\n",
-                        id, entry.toString(), nodeRole.toString(), entrylength));
+                debugLog(String.format(
+                        "Node %d add %s from client, %s at index %d\n",
+                        id, entry.toString(), nodeRole.toString(), entrylength
+                ));
 
                 leaderSendAppendEntry();
 
@@ -224,19 +208,18 @@ public class RaftNode implements MessageHandling {
         }
 
         // wait for commit/timeout
+        // https://stackoverflow.com/questions/7547255/java-getting-time-with-currenttimemillis-as-a-long-how-do-i-output-it-with-x
         waitForCommit(commitOperator);
 
-        if (VERBOSE){
-            System.out.printf("[AppendEntry success commit] Leader Node %d committed.\n", id);
-            System.out.flush();
-        }
-        logger.info(String.format("[AppendEntry success commit] Leader Node %d committed.\n", id));
+        debugLog(String.format(
+                "[AppendEntry success commit] Leader Node %d committed.\n", id
+        ));
     }
 
     public void waitForCommit(AppendEntryReceiveOperator commitOperator) {
         long waitUntil = System.currentTimeMillis() + MAX_ELECTION_TIMEOUT;
         do{
-            // do nothing
+            debugLog(".");
         }
         while (!commitOperator.hasCommitted() && System.currentTimeMillis() < waitUntil);
     }
@@ -267,25 +250,19 @@ public class RaftNode implements MessageHandling {
             RequestVoteArgs request = (RequestVoteArgs) toObjectConverter(message.getBody());
             // has to be a candidate
 
-            if (VERBOSE) {
-                System.out.printf("Node %d receives RequestVote from %d. at term %d\n",
-                        id, request.candidateId, persistentState.currentTerm);
-                System.out.flush();
-            }
-            logger.info(String.format(
+            debugLog(String.format(
                     "Node %d receives RequestVote from %d. at term %d\n",
-                    id, request.candidateId, persistentState.currentTerm));
+                    id, request.candidateId, persistentState.currentTerm
+            ));
 
             boolean voteGranted = false;
             if (request.term >= persistentState.currentTerm) {
                 refreshTerm(request.term);
-                if (VERBOSE) {
-                    System.out.printf("Node %d receives RequestVote from %d. at term %d\n", id, request.candidateId, persistentState.currentTerm);
-                    System.out.flush();
-                }
-                logger.info(String.format(
+
+                debugLog(String.format(
                         "Node %d receives RequestVote from %d. at term %d\n",
-                        id, request.candidateId, persistentState.currentTerm));
+                        id, request.candidateId, persistentState.currentTerm
+                ));
                 synchronized (persistentState.votedFor) {
                     if (persistentState.votedFor == Integer.MIN_VALUE) {
                         LogEntry lastEntry = persistentState.getLastEntry();
@@ -297,28 +274,17 @@ public class RaftNode implements MessageHandling {
                 }
             }
             else{
-                if (VERBOSE) {
-                    System.out.printf(
-                            "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
-                    );
-                    System.out.flush();
-                    logger.info(String.format(
-                            "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
-                    ));
-                }
+                debugLog(String.format(
+                        "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
+                ));
             }
 
             if (voteGranted){
-                if (VERBOSE) {
-                    System.out.printf("Node %d gives vote to Node %d. at term %d\n",
-                            id, request.candidateId, persistentState.currentTerm);
-                    System.out.flush();
-                }
+                debugLog(String.format(
+                        "Node %d gives vote to Node %d. at term %d\n",
+                        id, request.candidateId, persistentState.currentTerm
+                ));
             }
-
-            logger.info(String.format(
-                    "Node %d gives vote to Node %d. at term %d\n",
-                    id, request.candidateId, persistentState.currentTerm));
 
             return new Message(MessageType.RequestVoteReply, id, request.candidateId,
                     toByteConverter(new RequestVoteReply(persistentState.currentTerm, voteGranted)));
@@ -338,21 +304,16 @@ public class RaftNode implements MessageHandling {
                 // debug message
                 if (VERBOSE) {
                     if (appendEntriesArgs.entries.size() == 0) { // is heartbest
-                        System.out.printf("[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
-                                id, appendEntriesArgs.leaderId);
-                        System.out.flush();
-                        logger.info(String.format(
-                                "[Normal HeartBeating] Node %d receives heartbeat from %d.\n",
-                                id, appendEntriesArgs.leaderId));
+                        debugLog(String.format(
+                                "[Receive HeartBeat] Node %d received from Node %d.\n",
+                                id, appendEntriesArgs.leaderId
+                                ));
                     } else { // is Append Entry
-                        System.out.printf("[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
-                                persistentState.currentTerm,id, appendEntriesArgs.leaderId,
-                                appendEntriesArgs.prevLogIndex + 1, nodeRole.toString());
-                        System.out.flush();
-                        logger.info(String.format(
+                        debugLog(String.format(
                                 "[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
                                 persistentState.currentTerm,id, appendEntriesArgs.leaderId,
-                                appendEntriesArgs.prevLogIndex + 1, nodeRole.toString()));
+                                appendEntriesArgs.prevLogIndex + 1, nodeRole.toString()
+                        ));
                     }
                 }
 
@@ -373,28 +334,18 @@ public class RaftNode implements MessageHandling {
                         refreshTerm(appendEntriesArgs.term);
 
                         if (!appendEntriesArgs.entries.isEmpty()) {
-                            if (VERBOSE) {
-                                System.out.printf("Success on Node %d.\n", id);
-                                System.out.printf("Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
-                                        id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
-                                        nodeRole.toString());
-                                System.out.flush();
-                                logger.info(String.format(
-                                        "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
-                                        id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
-                                        nodeRole.toString()));
-                            }
+                            debugLog(String.format(
+                                    "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
+                                    id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
+                                    nodeRole.toString()
+                            ));
 
                             LogEntry lastEntry = persistentState.getLastEntry();
                             while (lastEntry != null && lastEntry.index > appendEntriesArgs.prevLogIndex) {
-                                if (VERBOSE) {
-                                    System.out.printf("Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
-                                            lastEntry.index, id, appendEntriesArgs.prevLogIndex);
-                                    System.out.flush();
-                                    logger.info(String.format(
-                                            "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
-                                            lastEntry.index, id, appendEntriesArgs.prevLogIndex));
-                                }
+                                debugLog(String.format(
+                                        "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
+                                        lastEntry.index, id, appendEntriesArgs.prevLogIndex
+                                ));
                                 persistentState.logEntries.remove(persistentState.logEntries.size() - 1);
                                 lastEntry = persistentState.getLastEntry();
                             }
@@ -411,29 +362,23 @@ public class RaftNode implements MessageHandling {
                             // for all server #1
                             for (int i = lastApplied; i < commitIndex; i++) {
                                 try {
-                                    if (VERBOSE) {
-                                        System.out.printf("Node %d commits logEntries at %d (command = %d)\n", id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command);
-                                        System.out.printf("Node %d logEntries: %s\n", id, persistentState.logEntries.toString());
-                                        System.out.flush();
-                                        logger.info(String.format(
-                                                "Node %d logEntries: %s\n", id, persistentState.logEntries.toString()));
-                                    }
                                     lib.applyChannel(new ApplyMsg(id, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command, false, null));
                                 } catch (RemoteException e) {
                                     e.printStackTrace();
                                 }
+                                debugLog(String.format(
+                                        "Node %d %s commits logEntries at %d, command = %d\n",
+                                        id, nodeRole, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command
+                                ));
                             }
+
                             lastApplied = commitIndex;
                         }
                     }
                     else{ // illeal, output debug information
-                        if (VERBOSE) {
-                            System.out.printf("[AppendEntry rejected] Node %d reject AppendEntry\n", id);
-                            System.out.flush();
-                            logger.info(String.format(
-                                    "[AppendEntry rejected] Node %d reject AppendEntry,out of range\n", id
-                            ));
-                        }
+                        debugLog(String.format(
+                                "[AppendEntry rejected] Node %d reject AppendEntry,out of range\n", id
+                        ));
                     }
                 }
 
@@ -462,14 +407,10 @@ public class RaftNode implements MessageHandling {
 
     private synchronized void toLeaderState() {
         nodeRole = NodeRole.LEADER;
-        if (VERBOSE) {
-            System.out.printf("Change to Leader: Term: %s; Node %d -> Leader.\n\n",
-                    persistentState.currentTerm, id);
-            System.out.flush();
-            logger.info(String.format(
-                    "Change to Leader: Term: %s; Node %d -> Leader.\n\n",
-                    persistentState.currentTerm, id));
-        }
+        debugLog(String.format(
+                "Change to Leader: Term: %s; Node %d -> Leader.\n",
+                persistentState.currentTerm, id
+        ));
         // Set up heart beat timer
         heartBeatTimer = new Timer();
         heartBeatTimerTask heartBeatTask = new heartBeatTimerTask();
@@ -496,15 +437,11 @@ public class RaftNode implements MessageHandling {
         if (nodeRole.equals(NodeRole.LEADER) && this.heartBeatTimer != null) {
             this.heartBeatTimer.cancel();
             this.heartBeatTimer.purge();
-
-            if(VERBOSE){
-                System.out.printf("[Node %d become Follower]", id);
-                System.out.flush();
-                logger.info(String.format(
-                        "[Node %d become Follower]", id));
-            }
         }
         nodeRole = NodeRole.FOLLOWER;
+        debugLog(String.format(
+                "[Node %d become Follower]", id
+        ));
         cleanThreadList();
     }
 
@@ -527,6 +464,11 @@ public class RaftNode implements MessageHandling {
         byte[] messageBody = toByteConverter(appendEntriesArgs);
         for (int i = 0; i < num_peers; i++) {
             if (i == id) continue;
+            debugLog(String.format(
+                    "[Send Heartbeat] Leader %d send heartbeat to Node %d at term %d\n",
+                    id, i , persistentState.currentTerm
+            ));
+
             try {
                 Message reply = lib.sendMessage(new Message(MessageType.AppendEntriesArgs, id, i, messageBody));
                 if (reply != null) {
@@ -599,11 +541,10 @@ public class RaftNode implements MessageHandling {
                 Message message = new Message(
                         MessageType.AppendEntriesArgs, id, followerId, messageBody);
 
-                if(VERBOSE){
-                    System.out.printf("[AppendEntry Sending...] term %d, Node %d[%s] ->  node %d: index %d, length %d\n",
-                            currentTerm, id, nodeRole.toString(),this.followerId, appendEntriesArgs.prevLogIndex+1, appendEntriesArgs.entries.size());
-                    System.out.flush();
-                }
+                debugLog(String.format(
+                        "[AppendEntry Sending...] term %d, Node %d[%s] ->  node %d: index %d, length %d\n",
+                        currentTerm, id, nodeRole.toString(),this.followerId, appendEntriesArgs.prevLogIndex+1, appendEntriesArgs.entries.size()
+                ));
 
                 // build message
                 Message response = null;
@@ -620,14 +561,10 @@ public class RaftNode implements MessageHandling {
                 else {
                     AppendEntriesReply reply = (AppendEntriesReply) toObjectConverter(response.getBody());
                     if (reply.isSuccess()) {
-                        if (VERBOSE) {
-                            System.out.printf("[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
-                                    reply.term, id, this.followerId, ++counter);
-                            System.out.flush();
-                            logger.info(String.format(
-                                    "[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
-                                    reply.term, id, this.followerId, ++counter));
-                        }
+                        debugLog(String.format(
+                                "[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
+                                reply.term, id, this.followerId, ++counter
+                        ));
 
                         // comit Log
                         commitOperator.commitLog();
@@ -661,18 +598,30 @@ public class RaftNode implements MessageHandling {
         private void increaseNextIndex(int id) {
             synchronized (nextIndex) {
                 nextIndex[id]++; // add log
+                debugLog(String.format(
+                        "[nextIndex++] Node %d increase NextIndex to .%d\n",
+                         id, nextIndex[id]
+                ));
             }
         }
 
         private void decreaseNextIndex(int id) {
             synchronized (nextIndex) {
                 nextIndex[id]--; // roll back
+                debugLog(String.format(
+                        "[nextIndex++] Node %d increase NextIndex to .%d\n",
+                        id, nextIndex[id]
+                ));
             }
         }
 
         private void updateMatchIndex(int id, int content) {
             synchronized (matchIndex) {
                 matchIndex[id] = content;
+                debugLog(String.format(
+                        "[matchIndex renew] Node %d renew matchIndex to .%d\n",
+                        id, content
+                ));
             }
         }
     }
@@ -698,12 +647,10 @@ public class RaftNode implements MessageHandling {
                 // receive majority 1/2 votes
                 if (recvCounter > num_peers / 2) {
                     // commit and apply
-                    if (VERBOSE) {
-                        System.out.printf("[Reach Agreement] Node %d " +
-                                        "received success for %d times \n",
-                                id, recvCounter);
-                        System.out.flush();
-                    }
+                    debugLog(String.format(
+                            "[Reach Agreement] Node %d received success for %d times \n",
+                            id, recvCounter
+                    ));
                     // receive Agreement
                     for (int i = lastApplied; i < indexOnDecide; ++i) {
 
@@ -719,14 +666,11 @@ public class RaftNode implements MessageHandling {
                                     persistentState.logEntries.get(i).command, nodeRole.toString());
                             e.printStackTrace();
                         }
-                        if (VERBOSE) {
-                            System.out.printf("[Commit log] Node %d " +
-                                            "commits logEntries at %d " +
-                                            "(command = %d)[%s]\n",
-                                    id, persistentState.logEntries.get(i).index,
-                                    persistentState.logEntries.get(i).command, nodeRole.toString());
-                            System.out.flush();
-                        }
+                        debugLog(String.format(
+                                "[Commit log] Node %d %s commits logEntries at %d, command = %d\n",
+                                id, nodeRole.toString(), persistentState.logEntries.get(i).index,
+                                persistentState.logEntries.get(i).command
+                        ));
                     }
 
                     commitIndex = indexOnDecide;
