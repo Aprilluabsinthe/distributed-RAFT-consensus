@@ -29,6 +29,24 @@ public class PersistentState {
         }
     }
 
+    public ArrayList<LogEntry> getStaticEntriesBetween(int startIndex, int endIndex){
+        if(startIndex >= 0 && startIndex <= logEntries.size()){
+            return new ArrayList<LogEntry>(logEntries.subList(startIndex, endIndex));
+        }
+        else{
+            return new ArrayList<LogEntry>();
+        }
+    }
+
+    public synchronized ArrayList<LogEntry> getSynchrEntriesBetween(int startIndex,int endIndex){
+        if(startIndex >= 0 && startIndex <= logEntries.size()){
+            return new ArrayList<LogEntry>(logEntries.subList(startIndex, endIndex));
+        }
+        else{
+            return new ArrayList<LogEntry>();
+        }
+    }
+
     public synchronized int getCurrentTerm() {
         return currentTerm;
     }
