@@ -1,6 +1,5 @@
 import lib.*;
 
-import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -13,8 +12,6 @@ import static lib.Helper.*;
 import static lib.Helper.toByteConverter;
 
 public class RaftNode implements MessageHandling {
-    // for outputing and printing
-    public static boolean VERBOSE = true;
 
     // node construction Members
     private int id;
@@ -170,7 +167,7 @@ public class RaftNode implements MessageHandling {
 
                 leaderSendAppendEntry();
 
-                StartReply startReply = new StartReply(entrylength, persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
+                StartReply startReply = new StartReply(entrylength, persistentState.currentTerm, true);
                 return startReply;
             } else { // not a leader
                 return new StartReply(0, 0, false);
@@ -211,9 +208,16 @@ public class RaftNode implements MessageHandling {
         // https://stackoverflow.com/questions/7547255/java-getting-time-with-currenttimemillis-as-a-long-how-do-i-output-it-with-x
         waitForCommit(commitOperator);
 
-        debugLog(String.format(
-                "[AppendEntry success commit] Leader Node %d committed.\n", id
-        ));
+        if(commitOperator.hasCommitted()){
+            debugLog(String.format(
+                    "[AppendEntry success commit] Leader Node %d committed.\n", id
+            ));
+        }else{// still not committed, timeout
+            debugLog(String.format(
+                    "[Leader TimeOut] Leader Node %d timeout.\n", id
+            ));
+        }
+
     }
 
     public void waitForCommit(AppendEntryReceiveOperator commitOperator) {
@@ -251,18 +255,13 @@ public class RaftNode implements MessageHandling {
             // has to be a candidate
 
             debugLog(String.format(
-                    "Node %d receives RequestVote from %d. at term %d\n",
+                    "[receive RequestVote] Node %d receives RequestVote from %d. at term %d\n",
                     id, request.candidateId, persistentState.currentTerm
             ));
 
             boolean voteGranted = false;
             if (request.term >= persistentState.currentTerm) {
                 refreshTerm(request.term);
-
-                debugLog(String.format(
-                        "Node %d receives RequestVote from %d. at term %d\n",
-                        id, request.candidateId, persistentState.currentTerm
-                ));
                 synchronized (persistentState.votedFor) {
                     if (persistentState.votedFor == Integer.MIN_VALUE) {
                         LogEntry lastEntry = persistentState.getLastEntry();
@@ -281,7 +280,7 @@ public class RaftNode implements MessageHandling {
 
             if (voteGranted){
                 debugLog(String.format(
-                        "Node %d gives vote to Node %d. at term %d\n",
+                        "[Vote For] Node %d gives vote to Node %d. at term %d\n",
                         id, request.candidateId, persistentState.currentTerm
                 ));
             }
@@ -335,22 +334,18 @@ public class RaftNode implements MessageHandling {
 
                         if (!appendEntriesArgs.entries.isEmpty()) {
                             debugLog(String.format(
-                                    "Success on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
+                                    "[Success from AppendEntry] on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
                                     id, persistentState.currentTerm, appendEntriesArgs.leaderId, appendEntriesArgs.term, appendEntriesArgs.prevLogIndex + 1,
                                     nodeRole.toString()
                             ));
 
-                            LogEntry lastEntry = persistentState.getLastEntry();
-                            while (lastEntry != null && lastEntry.index > appendEntriesArgs.prevLogIndex) {
-                                debugLog(String.format(
-                                        "Delete logEntries on index %d at Node %d. (prevLogIndex = %d)\n",
-                                        lastEntry.index, id, appendEntriesArgs.prevLogIndex
+                            persistentState.removeEntriesFrom(appendEntriesArgs.prevLogIndex);
+                            debugLog(String.format(
+                                        "[Delete logEntries] Node %d, from index %d\n",
+                                    appendEntriesArgs.prevLogIndex, id, appendEntriesArgs.prevLogIndex
                                 ));
-                                persistentState.logEntries.remove(persistentState.logEntries.size() - 1);
-                                lastEntry = persistentState.getLastEntry();
-                            }
-
-                            persistentState.logEntries.addAll(appendEntriesArgs.entries);
+//
+                            persistentState.addAllLogEntries(appendEntriesArgs.entries);
                         }
 
                         // #5
@@ -367,7 +362,7 @@ public class RaftNode implements MessageHandling {
                                     e.printStackTrace();
                                 }
                                 debugLog(String.format(
-                                        "Node %d %s commits logEntries at %d, command = %d\n",
+                                        "[commits logEntry]Node %d %s commits logEntries at %d, command = %d\n",
                                         id, nodeRole, persistentState.logEntries.get(i).index, persistentState.logEntries.get(i).command
                                 ));
                             }
@@ -401,6 +396,10 @@ public class RaftNode implements MessageHandling {
                 ToFollowerState();
                 persistentState.currentTerm = term;
                 persistentState.votedFor = Integer.MIN_VALUE;
+                debugLog(String.format(
+                        "[refresh Term]Node %d Term updated to %d\n",
+                        id, persistentState.currentTerm
+                ));
             }
         }
     }
@@ -440,7 +439,7 @@ public class RaftNode implements MessageHandling {
         }
         nodeRole = NodeRole.FOLLOWER;
         debugLog(String.format(
-                "[Node %d become Follower]", id
+                "[Node %d become Follower] ", id
         ));
         cleanThreadList();
     }
@@ -542,8 +541,8 @@ public class RaftNode implements MessageHandling {
                         MessageType.AppendEntriesArgs, id, followerId, messageBody);
 
                 debugLog(String.format(
-                        "[AppendEntry Sending...] term %d, Node %d[%s] ->  node %d: index %d, length %d\n",
-                        currentTerm, id, nodeRole.toString(),this.followerId, appendEntriesArgs.prevLogIndex+1, appendEntriesArgs.entries.size()
+                        "[AppendEntry Sending...] {Thread-%d} term %d, Node %d[%s] ->  node %d: index %d, length %d\n",
+                        currentThread().getId(),currentTerm, id, nodeRole.toString(),this.followerId, appendEntriesArgs.prevLogIndex+1, appendEntriesArgs.entries.size()
                 ));
 
                 // build message
@@ -562,8 +561,8 @@ public class RaftNode implements MessageHandling {
                     AppendEntriesReply reply = (AppendEntriesReply) toObjectConverter(response.getBody());
                     if (reply.isSuccess()) {
                         debugLog(String.format(
-                                "[AppendEntriesReply success] Term: %d, Node %d receives success from Node %d (%d times).\n",
-                                reply.term, id, this.followerId, ++counter
+                                "[AppendEntriesReply success] {Thread-%d} Term: %d, Node %d receives success from Node %d (%d times).\n",
+                                currentThread().getId(),reply.term, id, this.followerId, ++counter
                         ));
 
                         // comit Log
@@ -587,6 +586,11 @@ public class RaftNode implements MessageHandling {
             }
         }
 
+        @Override
+        public long getId() {
+            return super.getId();
+        }
+
         public void start() {
             super.start();
         }
@@ -599,8 +603,8 @@ public class RaftNode implements MessageHandling {
             synchronized (nextIndex) {
                 nextIndex[id]++; // add log
                 debugLog(String.format(
-                        "[nextIndex++] Node %d increase NextIndex to .%d\n",
-                         id, nextIndex[id]
+                        "[nextIndex++] {Thread-%d} Node %d increase NextIndex to .%d\n",
+                         currentThread().getId(),id, nextIndex[id]
                 ));
             }
         }
@@ -609,8 +613,8 @@ public class RaftNode implements MessageHandling {
             synchronized (nextIndex) {
                 nextIndex[id]--; // roll back
                 debugLog(String.format(
-                        "[nextIndex++] Node %d increase NextIndex to .%d\n",
-                        id, nextIndex[id]
+                        "[nextIndex++] {Thread-%d} Node %d increase NextIndex to .%d\n",
+                        currentThread().getId(),id, nextIndex[id]
                 ));
             }
         }
@@ -619,8 +623,8 @@ public class RaftNode implements MessageHandling {
             synchronized (matchIndex) {
                 matchIndex[id] = content;
                 debugLog(String.format(
-                        "[matchIndex renew] Node %d renew matchIndex to .%d\n",
-                        id, content
+                        "[matchIndex renew] {Thread-%d} Node %d renew matchIndex to .%d\n",
+                        currentThread().getId(),id, content
                 ));
             }
         }
