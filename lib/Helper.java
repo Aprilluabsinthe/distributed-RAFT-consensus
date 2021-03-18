@@ -9,6 +9,12 @@ public class Helper {
     public static int MIN_ELECTION_TIMEOUT = 300;
     public static boolean VERBOSE = true;
 
+    /**
+     * The generating function for the random election_time_out
+     * @param lowrange the low bound of the election_time_out
+     * @param highrange the high bound of the election_time_out
+     * @return int Random election_time_out
+     */
     public static int RandomTimeout(int lowrange, int highrange){
         Random random = new Random();
         return random.nextInt(highrange - lowrange) + lowrange;
@@ -51,6 +57,11 @@ public class Helper {
         return object;
     }
 
+    /**
+     * the Printing debug Log function, can be used with command line
+     * for example, java textname port > debuglog.txt
+     * @param string the formatted string
+     */
     public static void debugLog(String string){
         if (VERBOSE) {
             System.out.printf(

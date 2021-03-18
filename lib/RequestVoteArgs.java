@@ -7,6 +7,7 @@ import java.util.Objects;
  * This class is a wrapper for packing all the arguments that you might use in
  * the RequestVote call, and should be serializable to fill in the payload of
  * Message to be sent.
+ * Invoked by candidates to garher votes(&sect;5.2)
  *
  */
 public class RequestVoteArgs implements Serializable{
@@ -16,6 +17,14 @@ public class RequestVoteArgs implements Serializable{
     public int lastLogIndex;
     public int lastLogTerm;
 
+    /**
+     * <p>
+     *   Invoked by candidates to garher votes(&sect;5.2)
+     * @param term andidate's term
+     * @param candidateId candidate requesting vote
+     * @param lastLogIndex index of candidate's last log entry(&sect;5.4)
+     * @param lastLogTerm term of candidate's last log entry(&sect;5.4)
+     */
     public RequestVoteArgs(int term, int candidateId, int lastLogIndex, int lastLogTerm) {
         this.term = term;
         this.candidateId = candidateId;
