@@ -16,6 +16,11 @@ public class RequestVoteReply implements Serializable{
     public int term;
     public boolean voteGranted;
 
+    /**
+     * constructor for RequestVoteReply
+     * @param term the term recorede
+     * @param voteGranted true if vote, false if not vote
+     */
     public RequestVoteReply(int term, boolean voteGranted) {
         this.term = term;
         this.voteGranted = voteGranted;
@@ -29,6 +34,10 @@ public class RequestVoteReply implements Serializable{
         this.voteGranted = voteGranted;
     }
 
+    /**
+     * override for toString
+     * @return String
+     */
     @Override
     public String toString() {
         return "RequestVoteReply{" +
@@ -37,6 +46,11 @@ public class RequestVoteReply implements Serializable{
                 '}';
     }
 
+    /**
+     * override for equals
+     * @param o Object
+     * @return boolean
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -45,6 +59,10 @@ public class RequestVoteReply implements Serializable{
         return term == that.term && voteGranted == that.voteGranted;
     }
 
+    /**
+     * override for hashcode
+     * @return int
+     */
     @Override
     public int hashCode() {
         return Objects.hash(term, voteGranted);

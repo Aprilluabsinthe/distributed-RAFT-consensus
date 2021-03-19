@@ -3,6 +3,9 @@ package lib;
 import java.io.*;
 import java.util.Random;
 
+/**
+ * The Helper function for RaftNode
+ */
 public class Helper {
     public static int heartBeatFreq = 150;
     public static int MAX_ELECTION_TIMEOUT = 600;
@@ -59,7 +62,7 @@ public class Helper {
 
     /**
      * the Printing debug Log function, can be used with command line
-     * for example, java textname port > debuglog.txt
+     * for example, <code>java textname port > debuglog.txt</code>
      * @param string the formatted string
      */
     public static void debugLog(String string){

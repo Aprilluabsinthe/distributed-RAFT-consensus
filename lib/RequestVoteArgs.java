@@ -32,22 +32,42 @@ public class RequestVoteArgs implements Serializable{
         this.lastLogTerm = lastLogTerm;
     }
 
-    public int getTerm() {
+    /**
+     * Getter for Term
+     * @return int term
+     */
+    public synchronized int getTerm() {
         return term;
     }
 
-    public int getCandidateId() {
+    /**
+     * Getter for candidateId
+     * @return int candidateId
+     */
+    public synchronized int getCandidateId() {
         return candidateId;
     }
 
-    public int getLastLogIndex() {
+    /**
+     * Getter for lastLogIndex
+     * @return int lastLogIndex
+     */
+    public synchronized int getLastLogIndex() {
         return lastLogIndex;
     }
 
-    public int getLastLogTerm() {
+    /**
+     * Getter for lastLogTerm
+     * @return int lastLogTerm
+     */
+    public synchronized int getLastLogTerm() {
         return lastLogTerm;
     }
 
+    /**
+     * override for toString
+     * @return String
+     */
     @Override
     public String toString() {
         return "RequestVoteArgs{" +
@@ -58,6 +78,10 @@ public class RequestVoteArgs implements Serializable{
                 '}';
     }
 
+    /**
+     * override for equals
+     * @return boolean
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -66,6 +90,10 @@ public class RequestVoteArgs implements Serializable{
         return term == that.term && candidateId == that.candidateId && lastLogIndex == that.lastLogIndex && lastLogTerm == that.lastLogTerm;
     }
 
+    /**
+     * override for hashCode
+     * @return boolean
+     */
     @Override
     public int hashCode() {
         return Objects.hash(term, candidateId, lastLogIndex, lastLogTerm);

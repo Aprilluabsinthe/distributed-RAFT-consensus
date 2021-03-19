@@ -211,7 +211,7 @@ public class RaftNode implements MessageHandling {
      * if command received from client, append entry to local log,
      * respond after entry entry applied to state machine(&sect;5.3)
      * @param command the command to append.
-     * @return
+     * @return StartReply
      */
     @Override
     public synchronized StartReply start(int command) {
@@ -238,6 +238,10 @@ public class RaftNode implements MessageHandling {
         }
     }
 
+    /**
+     * Construct a get state packet with given term and leader.
+     * @return GetStateReply
+     */
     @Override
     public GetStateReply getState() {
         GetStateReply StateReply = new GetStateReply(persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
@@ -279,12 +283,11 @@ public class RaftNode implements MessageHandling {
                     "[Leader TimeOut] Leader Node %d timeout.\n", id
             ));
         }
-
     }
 
     /**
      * do nothing until committed or timeout
-     * @param commitOperator
+     * @param commitOperator the AppendEntryReceiveOperator to operate
      */
     public void waitForCommit(AppendEntryReceiveOperator commitOperator) {
         long waitUntil = System.currentTimeMillis() + MAX_ELECTION_TIMEOUT;
