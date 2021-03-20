@@ -2,9 +2,7 @@ import lib.*;
 
 import java.rmi.RemoteException;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static java.lang.Thread.State.RUNNABLE;
 import static java.lang.Thread.State.TERMINATED;
@@ -38,7 +36,8 @@ public class RaftNode implements MessageHandling {
     private int electionTimeout;
 
     // Thread lists
-    private List<AppendEntrySendThread> aeSendThreadList;
+    // ref: https://stackoverflow.com/questions/22201762/java-concurrent-clear-of-the-list
+    private LinkedBlockingQueue<AppendEntrySendThread> aeSendThreadList;
 
 
     /**
@@ -67,10 +66,11 @@ public class RaftNode implements MessageHandling {
         Arrays.fill(this.nextIndex,1);
         this.matchIndex = new Integer[num_peers];
         Arrays.fill(this.matchIndex,0);
-
         this.isHeartBeating = false;
         lib = new TransportLib(port, id, this);
         this.electionTimeout = Helper.RandomTimeout(MIN_ELECTION_TIMEOUT, MAX_ELECTION_TIMEOUT);
+
+        aeSendThreadList = new LinkedBlockingQueue<>();
 
         debugLog("Initialize RaftNode...");
         debugLog(String.format(
@@ -262,8 +262,11 @@ public class RaftNode implements MessageHandling {
             AppendEntrySendThread sendThread = new AppendEntrySendThread(
                     i, currentIndex, persistentState.currentTerm,
                     commitOperator, persistentState.logEntries);
-            aeSendThreadList.add(sendThread);
-
+            try {
+                aeSendThreadList.put(sendThread);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             AppendEntrySendThread sendThreadClone = new AppendEntrySendThread(sendThread);
             sendThreadClone.start();
         }
@@ -578,46 +581,42 @@ public class RaftNode implements MessageHandling {
 
     /**
      * extends TimerTask abstract class for leader sending heartBeats
+     * ref <a href="https://www.iitk.ac.in/esc101/05Aug/tutorial/essential/threads/timer.html>Timer Task Reference</a>
+     * Send heartbeat(Empty AppendEntried RPCs) to all servers.
      */
     public class heartBeatTimerTask extends TimerTask {
         @Override
         public void run() {
-            leaderSendHeartBeats();
-        }
-    }
+            LogEntry lastLogEntry = persistentState.getLastEntry();
+            /*generate Heartbeat: empty AppendEntried, entries = Collections.emptyList()*/
+            AppendEntriesArgs appendEntriesArgs = new AppendEntriesArgs(persistentState.currentTerm, id, lastLogEntry.index,
+                    lastLogEntry.term, Collections.emptyList(), commitIndex);
+            byte[] messageBody = toByteConverter(appendEntriesArgs);
 
-    /**
-     * Send heartbeat(Empty AppendEntried RPCs) to all servers.
-     */
-    public void leaderSendHeartBeats() {
-        LogEntry lastLogEntry = persistentState.getLastEntry();
-        /*generate empty AppendEntried, entries = Collections.emptyList()*/
-        AppendEntriesArgs appendEntriesArgs = new AppendEntriesArgs(persistentState.currentTerm, id, lastLogEntry.index,
-                lastLogEntry.term, Collections.emptyList(), commitIndex);
-        byte[] messageBody = toByteConverter(appendEntriesArgs);
+            /*send to all servers except for self*/
+            for (int i = 0; i < num_peers; i++) {
+                if (i == id) continue;
+                debugLog(String.format(
+                        "[Send Heartbeat] Leader %d send heartbeat to Node %d at term %d , (next %d match %d)\n",
+                        id, i , persistentState.currentTerm,nextIndex[i],matchIndex[i]
+                ));
 
-        /*send to all servers except for self*/
-        for (int i = 0; i < num_peers; i++) {
-            if (i == id) continue;
-            debugLog(String.format(
-                    "[Send Heartbeat] Leader %d send heartbeat to Node %d at term %d , (next %d match %d)\n",
-                    id, i , persistentState.currentTerm,nextIndex[i],matchIndex[i]
-            ));
+                try {
+                    Message reply = lib.sendMessage(new Message(MessageType.AppendEntriesArgs, id, i, messageBody));
+                    if (reply != null) {
+                        AppendEntriesReply appendReply = (AppendEntriesReply) toObjectConverter(reply.getBody());
 
-            try {
-                Message reply = lib.sendMessage(new Message(MessageType.AppendEntriesArgs, id, i, messageBody));
-                if (reply != null) {
-                    AppendEntriesReply appendReply = (AppendEntriesReply) toObjectConverter(reply.getBody());
-
-                    /* if any of the followers has a newer term see Receiver Implementation #1*/
-                    if (!appendReply.success)
-                        refreshTerm(appendReply.term);
+                        /* if any of the followers has a newer term see Receiver Implementation #1*/
+                        if (!appendReply.success)
+                            refreshTerm(appendReply.term);
+                    }
+                } catch (RemoteException e) {
+                    System.err.printf("[Remote Exception] Node %d fails to send AppendEntries to Node %d.\n", id, i);
                 }
-            } catch (RemoteException e) {
-                System.err.printf("[Remote Exception] Node %d fails to send AppendEntries to Node %d.\n", id, i);
             }
         }
     }
+
 
     /**
      * Change to Follower State
@@ -625,9 +624,10 @@ public class RaftNode implements MessageHandling {
      *     CANDIDATE discovers cyrrent LEADER or new term
      *     LEADER discovers sever with higher rerm
      * </p>
+     * <a href="https://stackoverflow.com/questions/21492693/java-timer-cancel-v-s-timertask-cancel">References: Timer cancle</a>
      */
     public synchronized void ToFollowerState() {
-        /* if change from leader state, end heartbeat*/
+        /* if change from leader state, end and purge heartbeat*/
         if (nodeRole.equals(NodeRole.LEADER) && this.heartBeatTimer != null) {
             this.heartBeatTimer.cancel();
             this.heartBeatTimer.purge();
@@ -636,20 +636,21 @@ public class RaftNode implements MessageHandling {
         debugLog(String.format(
                 "[Node %d become Follower] ", id
         ));
+        /* the node's threadlist as a leader should be all cleaned*/
         cleanThreadList();
     }
 
     /**
      * synchronized helper function to clean all Leader's AppendEntries List
      * including threads for heartbeat and threads for LogLists
+     * <a href="https://stackoverflow.com/questions/22201762/java-concurrent-clear-of-the-list">concurrent clear of the list</a>
      * */
-    public synchronized void cleanThreadList(){
-        if (aeSendThreadList != null) {
-            for (AppendEntrySendThread thread : aeSendThreadList) {
-                thread.threadStop();
-            }
+    public void cleanThreadList(){
+        AppendEntrySendThread thread;
+        if ((thread = aeSendThreadList.poll()) != null ) {
+            thread.threadStop();
         }
-        this.aeSendThreadList = new ArrayList<>();
+        this.aeSendThreadList = new LinkedBlockingQueue<>();
     }
 
     /**
@@ -698,10 +699,10 @@ public class RaftNode implements MessageHandling {
 
         @Override
         public void run() {
-            /*forcefully mark the FOLLOWER's next log entry to send to the server the same as the current Index*/
+            /* forcefully rollback the FOLLOWER's next log entry to matchIndex[this.followerId]+1 */
             synchronized (nextIndex) {
-                if (currentIndex < nextIndex[this.followerId]) {
-                    nextIndex[this.followerId] = currentIndex;
+                if (matchIndex[this.followerId]+1 < nextIndex[this.followerId]) {
+                    nextIndex[this.followerId] = matchIndex[this.followerId]+1 ;
                 }
             }
             /* Rules for Servers - Leaders - #3:
@@ -754,6 +755,9 @@ public class RaftNode implements MessageHandling {
                     /* Rule for Servers - Leader - #3:(&sect;5.3)
                     Receiver Implementation for Leader while receive Reply of AppendEntries from Followers
                     see inner class commitOperator for detail*/
+                    if (reply.term > currentTerm) {
+                        refreshTerm(reply.term); // refresh Term
+                    }
                     if (reply.isSuccess()) {
                         /* if successfully, update NextIndex and matchIndex for follower*/
                         debugLog(String.format(
@@ -772,11 +776,7 @@ public class RaftNode implements MessageHandling {
                     else {
                         /* Rule for Servers - Leader - #3-2:(&sect;5.3)
                         if AppendEntries fails because of log inconsistency: decrement nextIndex and retry */
-                        if (reply.term > currentTerm) {
-                            refreshTerm(reply.term); // refresh Term
-                        } else {
-                            decreaseNextIndex(this.followerId);
-                        }
+                        decreaseNextIndex(this.followerId);
                     }
                 }
             }
