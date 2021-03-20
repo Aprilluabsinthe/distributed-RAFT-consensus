@@ -110,16 +110,30 @@ public class RaftNode implements MessageHandling {
 
         ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
         executorService.scheduleAtFixedRate(() -> {
-            if (nodeRole.equals(NodeRole.LEADER) || isHeartBeating ) {
-                synchronized (this) {
-                    isHeartBeating = false;
-                }
+            if (nodeRole.equals(NodeRole.LEADER)) {
+                /*if self is the LEADER, set heartbeat to false for next testing */
+                setHeartBeat(false);
+            }
+            else if (this.isHeartBeating){
+                /* HeartBeat detected, set heartbeat to false for next testing */
+                setHeartBeat(false);
             }
             else {
-                /*if election timeout elapses, statr new election*/
+                /* no heartbeats, if election timeout elapses, statr new election*/
                 newElection();
             }
         }, 0, electionTimeout, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * synchronized set heartbeat status, be used when detecting HeartBeats
+     * After detected, set heartbeat status to false for next time detcting
+     * @param heatBeatState true or false
+     */
+    public void setHeartBeat(boolean heatBeatState ){
+        synchronized (this) {
+            isHeartBeating = heatBeatState;
+        }
     }
 
     /**
@@ -152,7 +166,7 @@ public class RaftNode implements MessageHandling {
 
         int votesCounter = 1;
 
-        if (nodeRole.equals(NodeRole.CANDIDATE)){
+        if (nodeRole.equals(NodeRole.CANDIDATE)){ // pre-condition, only CANDIDATE can receive counts
             for (int i = 0; i < num_peers; i++) {
                 if (i == id) continue; // do not send message to oneself
 
@@ -170,6 +184,7 @@ public class RaftNode implements MessageHandling {
                 } catch (ClassCastException e) {
                     e.printStackTrace();
                 }
+
                 /* deal with <code>RequestVoteReply</code>*/
                 if (response != null) {
                     /* strip out the <code>byte[]</code> body, convert to <code>Object</code>*/
@@ -178,6 +193,7 @@ public class RaftNode implements MessageHandling {
                        set CurrentTerm = T, convert to follower*/
                     if (reply.term > persistentState.currentTerm) {
                         refreshTerm(reply.term);
+                        toFollowerState();
                         break;
                     }
                     /* if received one vote*/
@@ -248,6 +264,7 @@ public class RaftNode implements MessageHandling {
 
     /**
      * Send AppendEntry message to all the followers in parallel.
+     * can be valid AppendEntry or empty heartbeat
      */
     public void leaderSendAppendEntry() {
         int currentIndex = persistentState.getLastEntry().index;
@@ -256,6 +273,7 @@ public class RaftNode implements MessageHandling {
         // stop AppendEntrySendThreads
         cleanThreadList();
 
+        AppendEntrySendThread sendThreadClone = null;
         // create new thread for num_peers
         for (int i = 0; i < num_peers; i++) {
             if (i == id) continue;
@@ -267,14 +285,17 @@ public class RaftNode implements MessageHandling {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            AppendEntrySendThread sendThreadClone = new AppendEntrySendThread(sendThread);
+            sendThreadClone = new AppendEntrySendThread(sendThread);
             sendThreadClone.start();
         }
 
         // wait for commit/timeout
         // https://stackoverflow.com/questions/7547255/java-getting-time-with-currenttimemillis-as-a-long-how-do-i-output-it-with-x
+        // https://winterbe.com/posts/2015/04/07/java8-concurrency-tutorial-thread-executor-examples/
         waitForCommit(commitOperator);
+        sendThreadClone.threadStop();
 
+        /* if not timeout*/
         if(commitOperator.hasCommitted()){
             debugLog(String.format(
                     "[AppendEntry success commit] Leader Node %d committed.\n", id
@@ -284,6 +305,7 @@ public class RaftNode implements MessageHandling {
                     "[Leader TimeOut] Leader Node %d timeout.\n", id
             ));
         }
+
     }
 
     /**
@@ -342,6 +364,7 @@ public class RaftNode implements MessageHandling {
          * @return Message carrying RequestVoteReply(term,voteGranted)
          */
         public Message replyToReqVoteArgs(Message message) {
+//            synchronized (persistentState) {
             RequestVoteArgs request = (RequestVoteArgs) toObjectConverter(message.getBody());
             // has to be a candidate
 
@@ -350,37 +373,39 @@ public class RaftNode implements MessageHandling {
                     id, request.candidateId, persistentState.currentTerm
             ));
 
+            // default, not granted
             boolean voteGranted = false;
 
             if (request.term >= persistentState.currentTerm) {
                 /* for all server, update Term (&sect;5.1)*/
                 refreshTerm(request.term);
-                synchronized (persistentState.votedFor) {
+
+                synchronized (persistentState) {
                     /* if meet all GrantVote requirements(&sect;5.2  &sect;5.4)*/
-                        if (requirementsToGrantVote(request)) {
-                            /* then Grant Vote*/
-                            voteGranted = true;
-                            persistentState.votedFor = request.candidateId;
-                        }
+                    if (requirementsToGrantVote(request)) {
+                        /* then Grant Vote*/
+                        voteGranted = true;
+                        persistentState.votedFor = request.candidateId;
+                    }
                 }
-            }
-            else{
+            } else {
                 /* if term < currentTerm, reply voteGranted = false(&sect;5.1)*/
+                /* do nothing*/
                 debugLog(String.format(
-                        "[Outdated] Node %d: recv Request Votes Reply from prev term.\n",id
+                        "[Outdated] Node %d: recv Request Votes Reply from prev term.\n", id
                 ));
             }
 
-            if (voteGranted){
+            if (voteGranted) {
                 debugLog(String.format(
                         "[Vote For] Node %d gives vote to Node %d. at term %d\n",
                         id, request.candidateId, persistentState.currentTerm
                 ));
             }
-
             /* pack voteGranted information and form RequestVoteReply Message*/
             return new Message(MessageType.RequestVoteReply, id, request.candidateId,
                     toByteConverter(new RequestVoteReply(persistentState.currentTerm, voteGranted)));
+//            }
         }
 
         /***
@@ -439,13 +464,14 @@ public class RaftNode implements MessageHandling {
                     /* if the requirements for success are all met, set success to true*/
                     if (isLegal(appendEntriesArgs)) {
                         success = true;
-                        /* Rule all server #2(&sect;5.1):if term refreshed, change from leader to follower*/
-                        if (nodeRole.equals(NodeRole.CANDIDATE)) {
-                            ToFollowerState();
+                        /* Rule all server #2(&sect;5.1):if term refreshed, convert to follower*/
+                        if(refreshTerm(appendEntriesArgs.term)){
+                            toFollowerState();
                         }
                         refreshTerm(appendEntriesArgs.term);
 
-                        /* if is a Entry List */
+                        /* if is a Entry List
+                        * not A HeartBeat */
                         if (!appendEntriesArgs.entries.isEmpty()) {
                             debugLog(String.format(
                                     "[Success receive AppendEntry] on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
@@ -453,7 +479,7 @@ public class RaftNode implements MessageHandling {
                                     nodeRole.toString()
                             ));
 
-                            /* Rule AppendEntries RPC - Receiver Implementationreply - #3,#4
+                            /* Rule AppendEntries RPC - Receiver Implementation reply - #3,#4
                                forcefully append any new entries not already in th log
                              */
                             persistentState.removeEntriesFrom(appendEntriesArgs.prevLogIndex);
@@ -468,7 +494,7 @@ public class RaftNode implements MessageHandling {
                             ));
                         }
 
-                        /* Rule AppendEntries RPC - Receiver Implementationreply - #5:
+                        /* Rule AppendEntries RPC - Receiver Implementation reply - #5:
                           if leaderCommit > commitIndex, set commitIndex=min(leaderCommit, index of last new entry)
                          */
                         if (appendEntriesArgs.leaderCommit > commitIndex) {
@@ -500,7 +526,7 @@ public class RaftNode implements MessageHandling {
                         }
                     }
                     else{
-                        /* Rule AppendEntries RPC - Receiver Implementationreply - #3:
+                        /* Rule AppendEntries RPC - Receiver Implementation reply - #3:
                          forcefully delete conflicted entries and all the follow it
                          */
                         persistentState.removeEntriesFrom(appendEntriesArgs.prevLogIndex);
@@ -539,17 +565,19 @@ public class RaftNode implements MessageHandling {
      * set CurrentTerm = T, convert to follower
      * @param term term in request or response
      */
-    public void refreshTerm(int term) {
+    public boolean refreshTerm(int term) {
         synchronized (persistentState) {
             if (term > persistentState.currentTerm) {
-                ToFollowerState();
+                toFollowerState();
                 persistentState.currentTerm = term;
                 persistentState.votedFor = Integer.MIN_VALUE;
                 debugLog(String.format(
                         "[refresh Term]Node %d Term updated to %d\n",
                         id, persistentState.currentTerm
                 ));
+                return true;
             }
+            return false;
         }
     }
 
@@ -626,7 +654,7 @@ public class RaftNode implements MessageHandling {
      * </p>
      * <a href="https://stackoverflow.com/questions/21492693/java-timer-cancel-v-s-timertask-cancel">References: Timer cancle</a>
      */
-    public synchronized void ToFollowerState() {
+    public synchronized void toFollowerState() {
         /* if change from leader state, end and purge heartbeat*/
         if (nodeRole.equals(NodeRole.LEADER) && this.heartBeatTimer != null) {
             this.heartBeatTimer.cancel();

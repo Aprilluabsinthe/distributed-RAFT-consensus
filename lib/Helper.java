@@ -10,7 +10,7 @@ public class Helper {
     public static int heartBeatFreq = 150;
     public static int MAX_ELECTION_TIMEOUT = 600;
     public static int MIN_ELECTION_TIMEOUT = 300;
-    public static boolean VERBOSE = true;
+    public static boolean VERBOSE = false;
 
     /**
      * The generating function for the random election_time_out
