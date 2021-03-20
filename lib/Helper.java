@@ -62,7 +62,7 @@ public class Helper {
 
     /**
      * the Printing debug Log function, can be used with command line
-     * for example, <code>java textname port > debuglog.txt</code>
+     * for example, <code>java textname port &gt; debuglog.txt</code>
      * @param string the formatted string
      */
     public static void debugLog(String string){

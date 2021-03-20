@@ -49,10 +49,8 @@ public class RaftNode implements MessageHandling {
      *     every node has a random election timepout, generated between <code>MIN_ELECTION_TIMEOUT</code> and <code>MAX_ELECTION_TIMEOUT</code>
      *     the time range can be set in <code>lib/Helper</code>
      *     The FOLLOWER has no heart beat
-     * </p>
      * <p>
      *     After constructing and initializing a RaftNode, start check current leader's heartbeat
-     * </p>
      * @param port the prot to start service
      * @param id the id of the number
      * @param num_peers total number of the nodes
@@ -130,7 +128,7 @@ public class RaftNode implements MessageHandling {
      * invoke election and nominate itself as a leader
      * each team starts with a election,
       */
-    private void newElection() {
+    public void newElection() {
         /* candidate(&sect;5.2) practice 1: Increment current Term */
         persistentState.currentTerm++;
         debugLog(String.format(
@@ -251,7 +249,7 @@ public class RaftNode implements MessageHandling {
     /**
      * Send AppendEntry message to all the followers in parallel.
      */
-    private void leaderSendAppendEntry() {
+    public void leaderSendAppendEntry() {
         int currentIndex = persistentState.getLastEntry().index;
         AppendEntryReceiveOperator commitOperator = new AppendEntryReceiveOperator(currentIndex);
 
@@ -299,14 +297,12 @@ public class RaftNode implements MessageHandling {
 
     /**
      * deliver Message in response to AppendEntries RPC or RequestVote RPC
-     * <p>
-     *     <ol>
-     *        <li>if is a AppendEntries RPC, reply AppendEntriesReply Message</li>
-     *        <li>if is a RequestVote RPC, reply AppendEntriesReply Message</li>
-     *     </ol>
+     * <ol>
+     *     <li>if is a AppendEntries RPC, reply AppendEntriesReply Message</li>
+     *     <li>if is a RequestVote RPC, reply AppendEntriesReply Message</li>
+     * </ol>
      *     Wrap all the receiver implementation in to inner class <code>BuildReply</code>
      *     see <code>BuildReply</code> for detailed information
-     * </p>
      *
      * @param message the message this node receives.
      * @return The message this node should reply for the incoming message.
@@ -333,7 +329,7 @@ public class RaftNode implements MessageHandling {
      *     <li>RequestVote RPC (&sect;5.1  &sect;5.2  &sect;5.4)</li>
      * </ol>
      */
-    private class BuildReply {
+    public class BuildReply {
         public BuildReply() {
         }
 
@@ -342,7 +338,7 @@ public class RaftNode implements MessageHandling {
          * @param message Message carring RequestVoteArgs(term,candidateId,lastLogIndex,lastLogTerm)
          * @return Message carrying RequestVoteReply(term,voteGranted)
          */
-        private Message replyToReqVoteArgs(Message message) {
+        public Message replyToReqVoteArgs(Message message) {
             RequestVoteArgs request = (RequestVoteArgs) toObjectConverter(message.getBody());
             // has to be a candidate
 
@@ -389,12 +385,12 @@ public class RaftNode implements MessageHandling {
          * <p>
          *     if VoteFor is null or candidateId
          *     and if Candidate's log is at least as up-to-date as receiver's log
-         *     then -> voteGranted == true
+         *     then voteGranted == true
          * </p>
          * @param request to make judgement
          * @return true if vote for the candidate, false if not
          */
-        private boolean requirementsToGrantVote(RequestVoteArgs request) {
+        public boolean requirementsToGrantVote(RequestVoteArgs request) {
             LogEntry lastEntry = persistentState.getLastEntry();
             return  (persistentState.votedFor == Integer.MIN_VALUE || persistentState.votedFor == request.candidateId)
                     && ((request.lastLogTerm == lastEntry.term && request.lastLogIndex >= lastEntry.index)
@@ -407,7 +403,7 @@ public class RaftNode implements MessageHandling {
          * @param message Message carring AppendEntriesArgs(term,leaderID, prevLogIndex, prevLogTerm, entries[], leaderCommit)
          * @return Message carrying AppendEntriesReply(term,success)
          */
-        private Message replyToApdEntriesArgs(Message message) {
+        public Message replyToApdEntriesArgs(Message message) {
             synchronized (persistentState) {
                 AppendEntriesArgs appendEntriesArgs = (AppendEntriesArgs) toObjectConverter(message.getBody());
                 boolean success;
@@ -529,18 +525,18 @@ public class RaftNode implements MessageHandling {
          * @param request AppendEntriesArgs request for checking
          * @return true if is Legal, false if conflicted
          */
-        private boolean isLegal(AppendEntriesArgs request) {
+        public boolean isLegal(AppendEntriesArgs request) {
             return ((persistentState.logEntries.size() >= request.prevLogIndex)  &&
                     (persistentState.logEntries.size() == 0 || request.prevLogIndex == 0 || persistentState.logEntries.get(request.prevLogIndex - 1).term == request.prevLogTerm));
         }
     }
 
     /**
-     * if RPC response contains term T > currentTerm
+     * if RPC response contains term T &gt; currentTerm
      * set CurrentTerm = T, convert to follower
      * @param term term in request or response
      */
-    private void refreshTerm(int term) {
+    public void refreshTerm(int term) {
         synchronized (persistentState) {
             if (term > persistentState.currentTerm) {
                 ToFollowerState();
@@ -557,7 +553,7 @@ public class RaftNode implements MessageHandling {
     /**
      * LEADERS initialization
      */
-    private synchronized void toLeaderState() {
+    public synchronized void toLeaderState() {
         nodeRole = NodeRole.LEADER;
         debugLog(String.format(
                 "Change to Leader: Term: %s; Node %d -> Leader.\n",
@@ -583,7 +579,7 @@ public class RaftNode implements MessageHandling {
     /**
      * extends TimerTask abstract class for leader sending heartBeats
      */
-    class heartBeatTimerTask extends TimerTask {
+    public class heartBeatTimerTask extends TimerTask {
         @Override
         public void run() {
             leaderSendHeartBeats();
@@ -593,7 +589,7 @@ public class RaftNode implements MessageHandling {
     /**
      * Send heartbeat(Empty AppendEntried RPCs) to all servers.
      */
-    private void leaderSendHeartBeats() {
+    public void leaderSendHeartBeats() {
         LogEntry lastLogEntry = persistentState.getLastEntry();
         /*generate empty AppendEntried, entries = Collections.emptyList()*/
         AppendEntriesArgs appendEntriesArgs = new AppendEntriesArgs(persistentState.currentTerm, id, lastLogEntry.index,
@@ -630,7 +626,7 @@ public class RaftNode implements MessageHandling {
      *     LEADER discovers sever with higher rerm
      * </p>
      */
-    private synchronized void ToFollowerState() {
+    public synchronized void ToFollowerState() {
         /* if change from leader state, end heartbeat*/
         if (nodeRole.equals(NodeRole.LEADER) && this.heartBeatTimer != null) {
             this.heartBeatTimer.cancel();
@@ -647,7 +643,7 @@ public class RaftNode implements MessageHandling {
      * synchronized helper function to clean all Leader's AppendEntries List
      * including threads for heartbeat and threads for LogLists
      * */
-    private synchronized void cleanThreadList(){
+    public synchronized void cleanThreadList(){
         if (aeSendThreadList != null) {
             for (AppendEntrySendThread thread : aeSendThreadList) {
                 thread.threadStop();
@@ -661,7 +657,7 @@ public class RaftNode implements MessageHandling {
      * The leader will send HeartBeat and AppendLogs to all server/specific server
      * Thus will need to construct multiple thread tasks
      */
-    private class AppendEntrySendThread extends Thread {
+    public class AppendEntrySendThread extends Thread {
         private int followerId;
         private int currentIndex;
         private State state = RUNNABLE;
@@ -675,7 +671,7 @@ public class RaftNode implements MessageHandling {
          * can be used to clone an identical thread for running, while adding the original one into the store list
          * @param aeSendThread the AppendEntriesSendThread to be cloned
          */
-        private AppendEntrySendThread(AppendEntrySendThread aeSendThread) {
+        public AppendEntrySendThread(AppendEntrySendThread aeSendThread) {
             this.followerId = aeSendThread.followerId;
             this.currentIndex = aeSendThread.currentIndex;
             this.commitOperator = aeSendThread.commitOperator;
@@ -691,7 +687,7 @@ public class RaftNode implements MessageHandling {
          * @param commitOperator the Reply-Receive-Operator for this thread, call if AppendEntry response <code>success</code>
          * @param NodeLog The current LogEntries List, need to make a copy, do not modify the original Log in State Machine
          */
-        private AppendEntrySendThread(int followerId, int currentIndex, int currentTerm, AppendEntryReceiveOperator commitOperator,
+        public AppendEntrySendThread(int followerId, int currentIndex, int currentTerm, AppendEntryReceiveOperator commitOperator,
                                       List<LogEntry> NodeLog) {
             this.followerId = followerId;
             this.currentIndex = currentIndex;
@@ -806,7 +802,7 @@ public class RaftNode implements MessageHandling {
         /**
          * stop thread, set running state to TERMINATED
          */
-        private void threadStop() {
+        public void threadStop() {
             state = TERMINATED;
         }
 
@@ -814,7 +810,7 @@ public class RaftNode implements MessageHandling {
          * synchronized function to increase NextIndex
          * @param followerId the follower to be updated
          */
-        private void increaseNextIndex(int followerId) {
+        public void increaseNextIndex(int followerId) {
             synchronized (nextIndex) {
                 nextIndex[followerId]++; // add log
                 debugLog(String.format(
@@ -828,7 +824,7 @@ public class RaftNode implements MessageHandling {
          * synchronized function to decrease NextIndex
          * @param followerId the follower to be updated
          */
-        private void decreaseNextIndex(int followerId) {
+        public void decreaseNextIndex(int followerId) {
             synchronized (nextIndex) {
                 nextIndex[followerId]--; // roll back
                 debugLog(String.format(
@@ -843,7 +839,7 @@ public class RaftNode implements MessageHandling {
          * @param followerId the follower to be updated
          * @param highestIndex the highest log entry known to be replicated on server
          */
-        private void updateMatchIndex(int followerId, int highestIndex) {
+        public void updateMatchIndex(int followerId, int highestIndex) {
             synchronized (matchIndex) {
                 matchIndex[followerId] = highestIndex;
                 debugLog(String.format(
@@ -858,7 +854,7 @@ public class RaftNode implements MessageHandling {
     /**
      * ReceiveOperator for each AppendEntries Send Thread
      */
-    private class AppendEntryReceiveOperator{
+    public class AppendEntryReceiveOperator{
         private int indexOnDecide; // it probably equals to currentIndex
         private int successCounter = 1;
         private boolean hasCommitted = false;
@@ -869,7 +865,7 @@ public class RaftNode implements MessageHandling {
          * defult successCounter is 1
          * default hasCommitted = false
          */
-        private AppendEntryReceiveOperator(int index) {
+        public AppendEntryReceiveOperator(int index) {
             this.indexOnDecide = index;
             synchronized(lastApplied){
                 lastApplied = commitIndex;
@@ -881,7 +877,7 @@ public class RaftNode implements MessageHandling {
          * every time this function is called, one success is replied
          * count whether there is majority votes
          */
-        private void commitLog() {
+        public void commitLog() {
             synchronized (this) {
                 if(!hasCommitted){
                     successCounter++;
@@ -929,7 +925,7 @@ public class RaftNode implements MessageHandling {
          * getter for hasCommitted, for other members to visit
          * @return true if has committed, false if not
          */
-        private Boolean hasCommitted() {
+        public Boolean hasCommitted() {
             synchronized (this) {
                 return hasCommitted;
             }
@@ -939,10 +935,10 @@ public class RaftNode implements MessageHandling {
     /**
      * Special Case
      * see Rules for Servers - Leaders - #4:
-     * if there exists an N such that N > commitIndex, a majority of matchIndex[i] >= N
+     * if there exists an N such that N &gt; commitIndex, a majority of matchIndex[i] &gt;=  N
      * and log[N].term == currentTerm, set commitIndex == N(&sect;5.3 , &sect;5.4)
      */
-    private synchronized void probNSituation() {
+    public synchronized void probNSituation() {
         List<Integer> arrList = Arrays.asList(matchIndex);
         int N;
         Collections.sort(arrList);

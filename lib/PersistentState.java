@@ -17,7 +17,7 @@ public class PersistentState {
      * construction for PersistentState
      * @param currentTerm currentTerm in state machine
      * @param votedFor  the id the current Node voted for
-     * @param logEntries List<LogEntry> logEntries
+     * @param logEntries List logEntries
      */
     public PersistentState(int currentTerm, Integer votedFor, List<LogEntry> logEntries) {
         this.currentTerm = currentTerm;
@@ -61,7 +61,7 @@ public class PersistentState {
      * Static get Entries Between startIndex(inclusive) to endIndex(exclusive)
      * @param startIndex the startIndex of the substring
      * @param endIndex the endIndex of the substring
-     * @return ArrayList<LogEntry>
+     * @return ArrayList LogEntry
      */
     public ArrayList<LogEntry> getStaticEntriesBetween(int startIndex, int endIndex){
         if(startIndex >= 0 && startIndex <= logEntries.size()){
@@ -86,7 +86,7 @@ public class PersistentState {
 
     /**
      * synchronized addAll, addAllLogEntries,
-     * @param list List<LogEntry>
+     * @param list List LogEntry
      */
     public synchronized void addAllLogEntries(List<LogEntry> list){
         logEntries.addAll(list);
@@ -96,7 +96,7 @@ public class PersistentState {
      * synchronized get Entries Between startIndex(inclusive) to endIndex(exclusive)
      * @param startIndex the startIndex of the substring
      * @param endIndex the endIndex of the substring
-     * @return ArrayList<LogEntry>
+     * @return ArrayList LogEntry
      */
     public synchronized ArrayList<LogEntry> getSynchrEntriesBetween(int startIndex,int endIndex){
         if(startIndex >= 0 && startIndex <= logEntries.size()){
