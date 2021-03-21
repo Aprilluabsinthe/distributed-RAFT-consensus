@@ -13,9 +13,9 @@ public class RaftNode implements MessageHandling {
     private NodeRole nodeRole;
 
     // node construction Members
-    private int id;
+    private final int id;
     private static TransportLib lib;
-    private int num_peers;
+    private final int num_peers;
 
     //Persistent State for all servers
     // include currentTerm, votesFor and log[]
@@ -33,7 +33,7 @@ public class RaftNode implements MessageHandling {
 
     // Timing members
     private Timer heartBeatTimer;
-    private int electionTimeout;
+    private final int electionTimeout;
 
     // Thread lists
     // ref: https://stackoverflow.com/questions/22201762/java-concurrent-clear-of-the-list
@@ -141,7 +141,7 @@ public class RaftNode implements MessageHandling {
      * Role: FOLLOWER or CANDIDATE
      * invoke election and nominate itself as a leader
      * each team starts with a election,
-      */
+     */
     public void newElection() {
         /* candidate(&sect;5.2) practice 1: Increment current Term */
         persistentState.currentTerm++;
@@ -243,8 +243,7 @@ public class RaftNode implements MessageHandling {
                 /* send AppendEntries to all other server */
                 leaderSendAppendEntry();
 
-                StartReply startReply = new StartReply(entrylength, persistentState.currentTerm, true);
-                return startReply;
+                return new StartReply(entrylength, persistentState.currentTerm, true);
             } else { // not a leader
                 return new StartReply(0, 0, false);
             }
@@ -258,8 +257,7 @@ public class RaftNode implements MessageHandling {
      */
     @Override
     public GetStateReply getState() {
-        GetStateReply StateReply = new GetStateReply(persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
-        return StateReply;
+        return new GetStateReply(persistentState.currentTerm, nodeRole.equals(NodeRole.LEADER));
     }
 
     /**
@@ -293,7 +291,9 @@ public class RaftNode implements MessageHandling {
         // https://stackoverflow.com/questions/7547255/java-getting-time-with-currenttimemillis-as-a-long-how-do-i-output-it-with-x
         // https://winterbe.com/posts/2015/04/07/java8-concurrency-tutorial-thread-executor-examples/
         waitForCommit(commitOperator);
-        sendThreadClone.threadStop();
+        if (sendThreadClone != null) {
+            sendThreadClone.threadStop();
+        }
 
         /* if not timeout*/
         if(commitOperator.hasCommitted()){
@@ -442,7 +442,7 @@ public class RaftNode implements MessageHandling {
                         debugLog(String.format(
                                 "[Receive HeartBeat] Node %d received from Node %d.\n",
                                 id, appendEntriesArgs.leaderId
-                                ));
+                        ));
                     } else { // is Append Entry
                         debugLog(String.format(
                                 "[Receive append entry] term %d, Node %d <- append entry <- %d, for index %d. [role %s]\n",
@@ -454,11 +454,11 @@ public class RaftNode implements MessageHandling {
 
                 /* the sefault success flag is false, do not change unless meet all requirements*/
                 success = false;
-                AppendEntriesReply replyBody = null;
+                AppendEntriesReply replyBody;
 
                 /* Rule AppendEntries RPC - Receiver Implementation - #1: success = false; if term < persistentState.currentTerm */
                 if(appendEntriesArgs.term >= persistentState.currentTerm) {
-                    isHeartBeating = true;
+                    setHeartBeat(true);
                     refreshTerm(appendEntriesArgs.term);
 
                     /* if the requirements for success are all met, set success to true*/
@@ -471,7 +471,7 @@ public class RaftNode implements MessageHandling {
                         refreshTerm(appendEntriesArgs.term);
 
                         /* if is a Entry List
-                        * not A HeartBeat */
+                         * not A HeartBeat */
                         if (!appendEntriesArgs.entries.isEmpty()) {
                             debugLog(String.format(
                                     "[Success receive AppendEntry] on Node %d at term %d receives append entry from %d at term %d for index %d. %s\n",
@@ -484,9 +484,9 @@ public class RaftNode implements MessageHandling {
                              */
                             persistentState.removeEntriesFrom(appendEntriesArgs.prevLogIndex);
                             debugLog(String.format(
-                                        "[Rewrite logEntries - DELETE] Node %d, from index %d\n",
+                                    "[Rewrite logEntries - DELETE] Node %d, from index %d\n",
                                     id, appendEntriesArgs.prevLogIndex
-                                ));
+                            ));
                             persistentState.addAllLogEntries(appendEntriesArgs.entries);
                             debugLog(String.format(
                                     "[Rewrite logEntries - ADD] Node %d, from index %d\n",
@@ -539,8 +539,7 @@ public class RaftNode implements MessageHandling {
                 /* form AppendEntriesReply Message carrying success*/
                 replyBody = new AppendEntriesReply(persistentState.currentTerm, success);
                 byte[] byteReplyBody = toByteConverter(replyBody);
-                Message replyMessage = new Message(MessageType.AppendEntriesReply, id, message.getSrc(),byteReplyBody);
-                return replyMessage;
+                return new Message(MessageType.AppendEntriesReply, id, message.getSrc(),byteReplyBody);
             }
         }
 
@@ -687,13 +686,13 @@ public class RaftNode implements MessageHandling {
      * Thus will need to construct multiple thread tasks
      */
     public class AppendEntrySendThread extends Thread {
-        private int followerId;
-        private int currentIndex;
+        private final int followerId;
+        private final int currentIndex;
         private State state = RUNNABLE;
-        private AppendEntryReceiveOperator commitOperator;
+        private final AppendEntryReceiveOperator commitOperator;
         private int counter = 0;
-        private List<LogEntry> logCopy;
-        private int currentTerm;
+        private final List<LogEntry> logCopy;
+        private final int currentTerm;
 
         /**
          * for copy from a existing AppendEntrySendThread
@@ -717,11 +716,11 @@ public class RaftNode implements MessageHandling {
          * @param NodeLog The current LogEntries List, need to make a copy, do not modify the original Log in State Machine
          */
         public AppendEntrySendThread(int followerId, int currentIndex, int currentTerm, AppendEntryReceiveOperator commitOperator,
-                                      List<LogEntry> NodeLog) {
+                                     List<LogEntry> NodeLog) {
             this.followerId = followerId;
             this.currentIndex = currentIndex;
             this.commitOperator = commitOperator;
-            this.logCopy = new ArrayList<LogEntry>(NodeLog); // apply for a new list for static visit
+            this.logCopy = new ArrayList<>(NodeLog); // apply for a new list for static visit
             this.currentTerm = currentTerm;
         }
 
@@ -737,12 +736,12 @@ public class RaftNode implements MessageHandling {
             if last LogIndex >= nextIndex for a follower send AppendEntries RPC with log entries starting at nextIndex */
             while (this.state == RUNNABLE && nodeRole.equals(NodeRole.LEADER)) {
                 /* get FOLLOWER's prevLogTerm
-                * the prev Log is the one immediately preceding the new ones */
-                int prevIndex = (nextIndex[this.followerId] - 2 >=0) ? nextIndex[this.followerId] - 2 : 0 ;
+                 * the prev Log is the one immediately preceding the new ones */
+                int prevIndex = Math.max(nextIndex[this.followerId] - 2, 0);
                 int prevLogTerm = logCopy.get(prevIndex).getTerm();
 
                 /* get current static entries */
-                int startIndex = (nextIndex[this.followerId] - 1 >= 0) ? nextIndex[this.followerId] - 1 : 0;
+                int startIndex = Math.max(nextIndex[this.followerId] - 1, 0);
 
                 /* get the current different entries
                  * startIndex,inclusive
@@ -755,7 +754,7 @@ public class RaftNode implements MessageHandling {
                         startIndex, prevLogTerm, entries, commitIndex);
 
                 /* form Message body
-                * Object to byte[], byte[] wrapped as message*/
+                 * Object to byte[], byte[] wrapped as message*/
                 byte[] messageBody = toByteConverter(appendEntriesArgs);
                 Message message = new Message(
                         MessageType.AppendEntriesArgs, id, followerId, messageBody);
@@ -843,7 +842,7 @@ public class RaftNode implements MessageHandling {
                 nextIndex[followerId]++; // add log
                 debugLog(String.format(
                         "[nextIndex++] {Thread-%d} Node %d increase NextIndex to .%d\n",
-                         currentThread().getId(),followerId, nextIndex[followerId]
+                        currentThread().getId(),followerId, nextIndex[followerId]
                 ));
             }
         }
@@ -883,7 +882,7 @@ public class RaftNode implements MessageHandling {
      * ReceiveOperator for each AppendEntries Send Thread
      */
     public class AppendEntryReceiveOperator{
-        private int indexOnDecide; // it probably equals to currentIndex
+        private final int indexOnDecide; // it probably equals to currentIndex
         private int successCounter = 1;
         private boolean hasCommitted = false;
 
