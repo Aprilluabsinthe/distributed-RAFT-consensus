@@ -93,7 +93,7 @@ public class Config extends UnicastRemoteObject implements Remote {
             transportLayerCtrl = new Controller(controllerPort);
         } catch (Exception e) {
             e.printStackTrace();
-            System.exit( -1 );
+            System.exit(-1);
         }
 
         this.logs = new ArrayList<Map<Integer, Integer>>();

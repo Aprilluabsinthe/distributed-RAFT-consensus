@@ -52,7 +52,7 @@ public class Controller extends UnicastRemoteObject implements MessagingLayer {
     /**
      * Controller - Construct a controller listening on a given port.
      * @param port the given port for controller
-     * @throws Exception
+     * @throws Exception remote exception
      */
     public Controller(int port) throws Exception {
         reliable = true;

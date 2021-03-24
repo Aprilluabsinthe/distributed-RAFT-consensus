@@ -405,7 +405,6 @@ public class RaftNode implements MessageHandling {
             /* pack voteGranted information and form RequestVoteReply Message*/
             return new Message(MessageType.RequestVoteReply, id, request.candidateId,
                     toByteConverter(new RequestVoteReply(persistentState.currentTerm, voteGranted)));
-//            }
         }
 
         /***
@@ -563,6 +562,7 @@ public class RaftNode implements MessageHandling {
      * if RPC response contains term T &gt; currentTerm
      * set CurrentTerm = T, convert to follower
      * @param term term in request or response
+     * @return true if term is updated, false otherwise
      */
     public boolean refreshTerm(int term) {
         synchronized (persistentState) {
@@ -608,7 +608,7 @@ public class RaftNode implements MessageHandling {
 
     /**
      * extends TimerTask abstract class for leader sending heartBeats
-     * ref <a href="https://www.iitk.ac.in/esc101/05Aug/tutorial/essential/threads/timer.html>Timer Task Reference</a>
+     * <a href="https://www.iitk.ac.in/esc101/05Aug/tutorial/essential/threads/timer.html">Reference: Timer Task Reference</a>
      * Send heartbeat(Empty AppendEntried RPCs) to all servers.
      */
     public class heartBeatTimerTask extends TimerTask {
@@ -648,8 +648,8 @@ public class RaftNode implements MessageHandling {
     /**
      * Change to Follower State
      * <p> can be :
-     *     CANDIDATE discovers cyrrent LEADER or new term
-     *     LEADER discovers sever with higher rerm
+     *     CANDIDATE discovers current LEADER or new term
+     *     LEADER discovers sever with higher term
      * </p>
      * <a href="https://stackoverflow.com/questions/21492693/java-timer-cancel-v-s-timertask-cancel">References: Timer cancle</a>
      */
@@ -670,7 +670,7 @@ public class RaftNode implements MessageHandling {
     /**
      * synchronized helper function to clean all Leader's AppendEntries List
      * including threads for heartbeat and threads for LogLists
-     * <a href="https://stackoverflow.com/questions/22201762/java-concurrent-clear-of-the-list">concurrent clear of the list</a>
+     * <a href="https://stackoverflow.com/questions/22201762/java-concurrent-clear-of-the-list">Reference: Concurrent clear of the list</a>
      * */
     public void cleanThreadList(){
         AppendEntrySendThread thread;
@@ -740,7 +740,7 @@ public class RaftNode implements MessageHandling {
                 int prevIndex = Math.max(nextIndex[this.followerId] - 2, 0);
                 int prevLogTerm = logCopy.get(prevIndex).getTerm();
 
-                /* get current static entries */
+                // get current static entries
                 int startIndex = Math.max(nextIndex[this.followerId] - 1, 0);
 
                 /* get the current different entries
@@ -779,6 +779,7 @@ public class RaftNode implements MessageHandling {
                 else {
                     /* strip from Reply Message to get Object response */
                     AppendEntriesReply reply = (AppendEntriesReply) toObjectConverter(response.getBody());
+
                     /* Rule for Servers - Leader - #3:(&sect;5.3)
                     Receiver Implementation for Leader while receive Reply of AppendEntries from Followers
                     see inner class commitOperator for detail*/
@@ -820,7 +821,7 @@ public class RaftNode implements MessageHandling {
         }
 
         /**
-         * explicitly adopt start for clonning Thread to start
+         * explicitly adopt start for cloning Thread to start
          */
         public void start() {
             super.start();
@@ -979,6 +980,7 @@ public class RaftNode implements MessageHandling {
                 "[Probing N-Situation] the N that will receive majority matchIndex[i] >= N is % d\n",
                 N
         ));
+
         /* if there exists an N such that N > commitIndex and log[N].term == currentTerm */
         if(N > commitIndex && persistentState.logEntries.get(N).getTerm() == persistentState.currentTerm){
             /* commitIndex == N */
@@ -989,7 +991,7 @@ public class RaftNode implements MessageHandling {
 
     public static void main(String args[]) throws Exception {
         if (args.length != 3) throw new Exception("Need 2 args: <port> <id> <num_peers>");
-        //new usernode
+        // Create new usernode
         try {
             RaftNode UN = new RaftNode(Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2]));
         } catch (Exception | Error e) {
